@@ -4,6 +4,8 @@ import express, { NextFunction, Request, Response } from 'express';
 import { randomBytes } from 'crypto';
 import { PatchOperationType } from '@azure/cosmos';
 import { trace } from '@opentelemetry/api';
+import swaggerUi from 'swagger-ui-express';
+import { openApiSpec } from './openapi';
 import { claimsContainer, documentsContainer, getSetting, secretClient } from './azure';
 
 const CLAIM_TYPES = ['auto', 'home', 'health', 'commercial'] as const;
@@ -72,12 +74,29 @@ function publicView(claim: Claim) {
 // /robots933456.txt. Answer both so they don't show up as failed requests.
 app.get('/', (req, res) => {
   nameSpan(req);
-  res.json({ service: 'Contoso Claims Hub - Claims Intake API', status: 'ok' });
+  res.json({ service: 'Contoso Claims Hub - Claims Intake API', status: 'ok', docs: '/docs' });
 });
 app.get('/robots933456.txt', (req, res) => {
   nameSpan(req);
   res.type('text/plain').send('');
 });
+
+// --- API documentation ---------------------------------------------------------
+// OpenAPI description + Swagger UI. In production you would protect or disable
+// these; here they give learners a browser view of the API.
+app.get('/openapi.json', (req, res) => {
+  nameSpan(req);
+  res.json(openApiSpec);
+});
+app.use(
+  '/docs',
+  (_req: Request, _res: Response, next: NextFunction) => {
+    trace.getActiveSpan()?.updateName('GET /docs');
+    next();
+  },
+  swaggerUi.serve,
+  swaggerUi.setup(openApiSpec, { customSiteTitle: 'Contoso Claims Hub API' }),
+);
 
 app.get('/health', (req, res) => {
   nameSpan(req);
