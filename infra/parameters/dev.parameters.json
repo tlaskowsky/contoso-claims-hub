@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": { "value": "dev" },
+    "location": { "value": "centralus" },
+    "owner": { "value": "course-instructor" },
+    "cosmosEnableFreeTier": { "value": true },
+    "cosmosAutoscaleMaxThroughput": { "value": 1000 },
+    "appServicePlanSku": { "value": "S1" },
+    "appConfigSku": { "value": "developer" }
+  }
+}

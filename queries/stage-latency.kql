@@ -1,0 +1,7 @@
+// Average and P95 duration of each pipeline stage (Application Insights).
+requests
+| where timestamp > ago(1d)
+| summarize Calls = count(), AvgMs = round(avg(duration), 0), P95Ms = round(percentile(duration, 95), 0),
+            FailurePct = round(100.0 * countif(success == false) / count(), 1)
+          by cloud_RoleName, name
+| order by cloud_RoleName asc, name asc

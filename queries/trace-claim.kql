@@ -1,0 +1,15 @@
+// Trace one claim end-to-end across the API, validation Function, Service Bus,
+// processing Function and Durable workflow.  Replace the claim ID below.
+let claimId = "CLM-REPLACE-ME";
+let operations =
+    union traces, requests, exceptions
+    | where timestamp > ago(1d)
+    | where message has claimId or tostring(customDimensions) has claimId
+         or name has claimId or url has claimId or outerMessage has claimId
+    | where isnotempty(operation_Id)
+    | distinct operation_Id;
+union requests, dependencies, traces, exceptions
+| where timestamp > ago(1d)
+| where operation_Id in (operations) or message has claimId
+| project timestamp, itemType, cloud_RoleName, operation_Name, name, message, success, resultCode, duration, operation_Id
+| order by timestamp asc

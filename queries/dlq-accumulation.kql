@@ -1,0 +1,14 @@
+// Dead-letter accumulation on the Service Bus namespace (from diagnostic
+// metrics sent to Log Analytics), plus the exceptions that caused it.
+AzureMetrics
+| where TimeGenerated > ago(1d)
+| where ResourceProvider == "MICROSOFT.SERVICEBUS" and MetricName == "DeadletteredMessages"
+| summarize DeadLettered = max(Maximum) by bin(TimeGenerated, 5m), Resource
+| order by TimeGenerated desc;
+
+// Run separately against Application Insights (Logs blade of appi-claimshub-*):
+// exceptions
+// | where timestamp > ago(1d)
+// | where operation_Name == "processClaim"
+// | summarize Failures = count() by bin(timestamp, 5m), outerMessage
+// | order by timestamp desc

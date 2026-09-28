@@ -1,0 +1,29 @@
+{
+  "name": "claimshub-intake-api",
+  "version": "1.0.0",
+  "description": "Contoso Claims Hub - Claims Intake API (provided application code)",
+  "private": true,
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@azure/app-configuration": "^1.8.0",
+    "@azure/cosmos": "^4.2.0",
+    "@azure/identity": "^4.5.0",
+    "@azure/keyvault-secrets": "^4.9.0",
+    "@azure/monitor-opentelemetry": "^1.8.0",
+    "@azure/storage-blob": "^12.26.0",
+    "@opentelemetry/api": "^1.9.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

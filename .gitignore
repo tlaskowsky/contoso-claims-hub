@@ -1,0 +1,16 @@
+# Compiled output
+infra/**/*.json
+!infra/parameters/*.json
+!infra/bicepconfig.json
+dist/
+
+# Node / Functions
+node_modules/
+local.settings.json
+.azurefunctions/
+*.zip
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json

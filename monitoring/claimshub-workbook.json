@@ -1,0 +1,237 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "name": "header",
+      "content": {
+        "json": "# Contoso Claims Hub \u2014 Operations\nEnd-to-end view of the claims pipeline: **intake API \u2192 Event Grid \u2192 validation \u2192 Service Bus \u2192 processing \u2192 Durable approval workflow**.\n\nPlatform probes (`GET /`, `GET /health`, warm-up) are excluded from every tile."
+      }
+    },
+    {
+      "type": 9,
+      "name": "parameters",
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "parameters": [
+          {
+            "id": "6c1f7f3e-2b1a-4d7e-9a51-5b8d0e3a9c11",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let claims = requests | where name == \"POST /claims\" and success == true | count | extend Metric = \"Claims submitted\", Value = Count;\nlet docs = requests | where name == \"validateDocument\" | count | extend Metric = \"Documents validated\", Value = Count;\nlet workflows = traces | where message has \"approval workflow started\" | count | extend Metric = \"Approval workflows started\", Value = Count;\nlet failures = requests | where success == false and name !in (\"GET /\", \"GET /health\", \"GET /robots933456.txt\") | count | extend Metric = \"Failed operations\", Value = Count;\nunion claims, docs, workflows, failures | project Metric, Value",
+        "size": 4,
+        "title": "Pipeline at a glance",
+        "timeContextFromParameter": "TimeRange",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Metric",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "name": "kpis"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where name == \"POST /claims\"\n| summarize Claims = count() by bin(timestamp, {TimeRange:grain})",
+        "size": 0,
+        "title": "Claims submitted over time",
+        "timeContextFromParameter": "TimeRange",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      },
+      "name": "claims-over-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let started = traces | where message startswith \"Validating document\" | extend claimId = extract(@\"(CLM-[A-Z0-9]+-[A-F0-9]+)\", 1, message) | summarize Start = min(timestamp) by claimId;\nlet workflow = traces | where message has \"approval workflow started\" | extend claimId = extract(@\"(CLM-[A-Z0-9]+-[A-F0-9]+)\", 1, message) | summarize WorkflowStarted = min(timestamp) by claimId;\nstarted\n| join kind=inner workflow on claimId\n| extend LatencySeconds = round(datetime_diff('millisecond', WorkflowStarted, Start) / 1000.0, 1)\n| project Start, claimId, LatencySeconds\n| order by Start desc",
+        "size": 0,
+        "title": "End-to-end latency per claim: document validation \u2192 approval workflow started (seconds)",
+        "timeContextFromParameter": "TimeRange",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "LatencySeconds",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed",
+                "min": 0,
+                "max": 60
+              }
+            }
+          ]
+        }
+      },
+      "name": "e2e-latency"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where name !in (\"GET /\", \"GET /health\", \"GET /robots933456.txt\")\n| summarize Calls = count(), AvgMs = round(avg(duration), 0), P95Ms = round(percentile(duration, 95), 0),\n            FailurePct = round(100.0 * countif(success == false) / count(), 1)\n          by Component = cloud_RoleName, Operation = name\n| order by Component asc, Operation asc",
+        "size": 0,
+        "title": "Latency and failures by pipeline stage",
+        "timeContextFromParameter": "TimeRange",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "P95Ms",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed",
+                "min": 0,
+                "max": 3000
+              }
+            },
+            {
+              "columnMatch": "FailurePct",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed",
+                "min": 0,
+                "max": 50
+              }
+            }
+          ]
+        }
+      },
+      "name": "stage-latency"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where success == false and name !in (\"GET /\", \"GET /health\", \"GET /robots933456.txt\")\n| summarize Failures = count() by bin(timestamp, {TimeRange:grain}), Operation = name",
+        "size": 0,
+        "title": "Failed operations over time",
+        "timeContextFromParameter": "TimeRange",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      },
+      "name": "failures-over-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "exceptions\n| where operation_Name == \"processClaim\"\n| extend text = strcat(outerMessage, \" \", innermostMessage, \" \", tostring(details))\n| extend claimId = extract(@\"(CLM-[A-Z0-9]+-[A-F0-9]+)\", 1, text)\n| where isnotempty(claimId)\n| summarize Attempts = dcount(tostring(customDimensions.InvocationId)), LastAttempt = max(timestamp),\n            Reason = take_any(innermostMessage) by claimId\n| extend LikelyDeadLettered = Attempts >= 3\n| order by LastAttempt desc",
+        "size": 0,
+        "title": "Claim processing failures (messages retried, then dead-lettered after 3 attempts)",
+        "timeContextFromParameter": "TimeRange",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "LikelyDeadLettered",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "true",
+                    "representation": "4",
+                    "text": "Yes"
+                  },
+                  {
+                    "operator": "Default",
+                    "representation": "success",
+                    "text": "No"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "processing-failures"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/<subscription-id>/resourceGroups/rg-claimshub-dev/providers/Microsoft.Insights/components/appi-claimshub-dev"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
