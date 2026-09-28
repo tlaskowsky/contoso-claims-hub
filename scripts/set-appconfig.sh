@@ -7,7 +7,7 @@ source "$(dirname "$0")/common.sh" "${1:-dev}"
 KIND="${2:?key|flag}"; NAME="${3:?name}"; VALUE="${4:?value}"
 
 RG=$(output resourceGroupName)
-STORE=$(output appConfigName)
+STORE=$(output appConfigName); require "$STORE" "App Configuration store"
 STORE_ID=$(az appconfig show -g "$RG" -n "$STORE" --query id -o tsv)
 
 encode() { local s="$1"; s="${s//\//~2F}"; s="${s//:/~3A}"; printf '%s' "$s"; }

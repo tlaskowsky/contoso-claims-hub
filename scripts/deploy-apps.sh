@@ -3,10 +3,9 @@
 #   ./scripts/deploy-apps.sh dev
 source "$(dirname "$0")/common.sh" "${1:-dev}"
 
-RG=$(output resourceGroupName)
-API_APP=$(output apiAppName)
-VAL_APP=$(output validationFunctionAppName)
-PROC_APP=$(output processingFunctionAppName)
+API_APP=$(output apiAppName);                require "$API_APP" "API App Service"
+VAL_APP=$(output validationFunctionAppName); require "$VAL_APP" "validation Function app"
+PROC_APP=$(output processingFunctionAppName); require "$PROC_APP" "processing Function app"
 
 # --- Claims Intake API (App Service): build locally, zip-deploy dist + prod deps
 step "Building Claims Intake API"
@@ -17,7 +16,12 @@ STAGE=$(mktemp -d)
 cp -r dist package.json "$STAGE/"
 (cd "$STAGE" && npm install --omit=dev --no-audit --no-fund >/dev/null && zip -qr api.zip .)
 step "Deploying Claims Intake API to $API_APP"
-az webapp deploy -g "$RG" -n "$API_APP" --src-path "$STAGE/api.zip" --type zip
+# A brand-new App Service sometimes times out (HTTP 504) on its first deployment: retry.
+for attempt in 1 2 3; do
+  if az webapp deploy -g "$RG" -n "$API_APP" --src-path "$STAGE/api.zip" --type zip; then break; fi
+  if [[ $attempt -eq 3 ]]; then fail "API deployment failed after 3 attempts"; exit 1; fi
+  echo "   Deployment attempt $attempt failed; retrying in 30 seconds..."; sleep 30
+done
 rm -rf "$STAGE"
 popd >/dev/null
 ok "API deployed"

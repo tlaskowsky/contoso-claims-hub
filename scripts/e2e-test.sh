@@ -5,8 +5,8 @@ source "$(dirname "$0")/common.sh" "${1:-dev}"
 
 RG=$(output resourceGroupName)
 API=$(output apiUrl)
-PROC_APP=$(output processingFunctionAppName)
-SB=$(output serviceBusNamespaceName)
+PROC_APP=$(output processingFunctionAppName); require "$PROC_APP" "processing Function app"
+SB=$(output serviceBusNamespaceName); require "$SB" "Service Bus namespace"
 QUEUE=$(output processingQueueName)
 PROC_HOST="${PROC_APP}.azurewebsites.net"   # defaultHostName is empty for Flex Consumption apps
 FUNC_KEY=$(az functionapp keys list -g "$RG" -n "$PROC_APP" --query "functionKeys.default" -o tsv)
