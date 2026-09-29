@@ -3,11 +3,12 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "environmentName": { "value": "test" },
-    "location": { "value": "centralus" },
-    "owner": { "value": "course-instructor" },
+    "appServicePlanSku": { "value": "B1" },
+    "enableAutoscale": { "value": false },
+    "lockDownDataPlane": { "value": false },
+    "functionInstanceMemoryMB": { "value": 512 },
     "cosmosEnableFreeTier": { "value": false },
     "cosmosAutoscaleMaxThroughput": { "value": 1000 },
-    "appServicePlanSku": { "value": "S1" },
     "appConfigSku": { "value": "developer" }
   }
 }

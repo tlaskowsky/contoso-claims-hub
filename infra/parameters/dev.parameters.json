@@ -3,11 +3,13 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "environmentName": { "value": "dev" },
-    "location": { "value": "centralus" },
-    "owner": { "value": "course-instructor" },
-    "cosmosEnableFreeTier": { "value": true },
-    "cosmosAutoscaleMaxThroughput": { "value": 1000 },
     "appServicePlanSku": { "value": "S1" },
+    "enableAutoscale": { "value": true },
+    "autoscaleMaxInstances": { "value": 2 },
+    "lockDownDataPlane": { "value": true },
+    "functionInstanceMemoryMB": { "value": 512 },
+    "cosmosEnableFreeTier": { "value": false },
+    "cosmosAutoscaleMaxThroughput": { "value": 1000 },
     "appConfigSku": { "value": "developer" }
   }
 }

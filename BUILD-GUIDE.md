@@ -1,108 +1,96 @@
 # Contoso Claims Hub — Build Guide
 
-Instructor guide for deploying and verifying the complete reference solution
-(the end-of-course state) in a single environment. Not learner-facing.
+Instructor guide for preparing a class and deploying the complete reference
+solution (the end-of-course state). Not learner-facing.
 
 Plan on about 1–1.5 hours for a first run, most of it waiting for deployments.
 
 ---
 
-## 0. Prerequisites
+## How environments are organized
 
-Run everything from **bash** (macOS, Linux, WSL, or a Linux code-server instance).
+The class shares **one subscription**. Every person has a learner ID —
+`s01`–`s16` for students, `i01` for the instructor — and three pre-created
+resource groups:
 
-| Tool | Check |
+| Resource group | Used for |
 |---|---|
-| Azure CLI (latest) + Bicep | `az version`, `az bicep version` |
-| Node.js 22 LTS | `node -v` |
-| Azure Functions Core Tools v4 | `func --version` |
-| jq, zip, curl, git | `jq --version` |
+| `rg-claimshub-<id>-dev` | The environment built across the three days (S1, Private Endpoints) |
+| `rg-claimshub-<id>-test` | The Lab 3.3 second environment (B1, no Private Endpoints) |
+| `rg-claimshub-<id>-shell` | Cloud Shell storage (kept separate so teardown never touches it) |
 
-Optional, so the Azure CLI installs extensions without prompting:
+Learners are **Owner of their own resource groups only**. They can't see each
+other's environments or change anything at subscription level.
 
-```bash
-az config set extension.use_dynamic_install=yes_without_prompt
-```
+## 0. Class setup (instructor, a day or two before class)
 
-Sign in and register the resource providers (once per subscription):
+Tools (instructor machine): Azure CLI + Bicep, Node.js 22, jq, zip, git, GitHub
+CLI. Learners need nothing but a browser — Cloud Shell has the Azure CLI and Bicep.
 
 ```bash
 az login --use-device-code
-az account set --subscription "<subscription name or ID>"
+az account set --subscription "<training subscription>"
 
-for p in Microsoft.App Microsoft.Web Microsoft.DocumentDB Microsoft.ServiceBus \
-         Microsoft.EventGrid Microsoft.KeyVault Microsoft.AppConfiguration \
-         Microsoft.Storage Microsoft.Network Microsoft.Insights \
-         Microsoft.OperationalInsights Microsoft.ManagedIdentity \
-         Microsoft.PolicyInsights; do
-  az provider register --namespace $p
-done
+cp scripts/instructor/learners.example.csv learners.csv    # edit: one line per learner
+./scripts/instructor/setup-class.sh learners.csv
+./scripts/instructor/check-quotas.sh 17                     # learners + instructor
 ```
 
-`Microsoft.PolicyInsights` is needed for policy **compliance reporting**
-(enforcement works without it, but the Compliance view stays empty).
+`setup-class.sh` registers the resource providers, invites each learner as a
+guest, creates their three resource groups, and assigns **Owner** plus
+**App Configuration Data Owner** (granted in advance so the first deployment
+doesn't hit a role-propagation `Forbidden`). Learners must accept the
+invitation email before class. Keep `learners.csv` out of the repository.
 
-### Region and quota
+`check-quotas.sh` checks App Service S1/B1 headroom, resource counts, and
+provider registration. The App Service tiers are the tight ones: every dev
+environment needs 1 S1 instance, every test environment 1 B1 instance.
 
-The parameter files use **Central US** and App Service **S1**. Before deploying
-in any region, check two things:
+**Publish the application packages** (after any code change):
 
 ```bash
-# 1. Flex Consumption is offered
-az functionapp list-flexconsumption-locations --query "[].name" -o tsv | grep -ix centralus
+./scripts/build-packages.sh --release     # builds packages/*.zip and publishes a GitHub release
 ```
 
-2. **App Service quota.** New subscriptions can have **zero** App Service quota
-   in some regions. Portal → **Quotas** → **App Service** → filter by
-   subscription and region → check the **S1 VMs** row. You need at least 1
-   (3 if you want autoscale to be able to scale out). If it's 0, request an
-   increase or choose a region where it isn't.
-
-To change region or tier, edit `location` / `appServicePlanSku` in both files
-under `infra/parameters/`.
-
----
+Learners' `deploy-apps.sh` downloads these ready-built packages, so nobody
+needs Node.js or Functions Core Tools in class.
 
 ## 1. Deploy infrastructure — pass 1 (about 10–15 minutes)
 
+Every person, in their own shell:
+
 ```bash
-export ALERT_EMAIL="you@example.com"      # optional: receives alert emails
+export LEARNER_ID=s01                     # your ID; add to ~/.bashrc to keep it
 ./scripts/deploy-infra.sh dev
 ```
-
-Creates everything except the Event Grid subscription, with the data plane
-already locked behind Private Endpoints.
 
 **If it fails:**
 
 | Error | Cause | Action |
 |---|---|---|
-| `Forbidden` on App Configuration `keyValues` | The deployer's App Configuration Data Owner role hasn't propagated yet (first run in a new resource group) | Wait 3–5 minutes, rerun |
-| `PrincipalNotFound` on a role assignment | A new managed identity hasn't replicated in Entra ID yet | Rerun |
-| `SubscriptionIsOverQuotaForSku` | No App Service quota for that tier in the region | See *Region and quota* above |
-| "Virtual network resource not found" on a DNS zone link | Stale state from a recently deleted environment with the same names | Wait a few minutes, rerun |
-| Key Vault name exists / soft-deleted | Previous environment not purged | Run `teardown.sh` first, or `export NAME_SEED=2` |
+| `Resource group rg-claimshub-… not found` | Wrong `LEARNER_ID`, or class setup not run | Check the ID |
+| `Forbidden` on App Configuration `keyValues` | Data Owner role not yet effective | Wait 3–5 minutes, rerun |
+| `PrincipalNotFound` on a role assignment | A new managed identity hasn't replicated yet | Rerun |
+| `SubscriptionIsOverQuotaForSku` | App Service quota exhausted | Instructor: `check-quotas.sh` |
+| "Virtual network resource not found" on a DNS link | Stale state from a recently deleted environment | Wait a few minutes, rerun |
 
-The deployment is idempotent: rerunning is always safe.
+Reruns are always safe.
 
-## 2. Deploy the applications (about 10 minutes)
+## 2. Deploy the applications (about 5 minutes)
 
 ```bash
-./scripts/deploy-apps.sh dev
+./scripts/deploy-apps.sh dev                  # uses the published packages
+./scripts/deploy-apps.sh dev --from-source    # instructor: build locally instead
 ```
 
-Builds and zip-deploys the API, then builds and publishes both Function apps
-with their production dependencies packaged (Flex Consumption publishes
-without a remote build). It ends by listing the registered functions:
+It deploys the API (retrying automatically if a new App Service times out)
+and both Function apps, then lists the registered functions:
 
 ```
 validateDocument
 approvalOrchestrator  checkAutoApproval  coverageCheck  documentationCheck  fraudCheck
 getWorkflowStatus  processClaim  recordAssessment  recordDecision  submitApproval
 ```
-
-If a Function app lists **no functions**, its package is missing dependencies —
-check the publish output: the upload should be several MB, not a few KB.
 
 ## 3. Deploy infrastructure — pass 2 (Event Grid subscription)
 
@@ -111,6 +99,8 @@ Event Grid validates that `validateDocument` exists, so this runs after step 2:
 ```bash
 ./scripts/deploy-infra.sh dev --with-event-subscription
 ```
+
+Run each step only after the previous one succeeded.
 
 ## 4. Run the end-to-end test (about 8 minutes)
 
@@ -133,9 +123,9 @@ The first run takes a little longer while the Flex Consumption apps cold-start.
 **Policy (Lab 1.1).** At least 30 minutes after the first deployment:
 
 ```bash
-az vm create -g rg-claimshub-dev -n vm-policytest --image Ubuntu2204 --size Standard_B1s \
+az vm create -g rg-claimshub-$LEARNER_ID-dev -n vm-policytest --image Ubuntu2204 --size Standard_B1s \
   --generate-ssh-keys --only-show-errors 2>&1 | grep -i -E "policy|disallowed" | head -3
-az resource list -g rg-claimshub-dev --query "[?contains(name,'policytest')].name" -o tsv   # expect nothing
+az resource list -g rg-claimshub-$LEARNER_ID-dev --query "[?contains(name,'policytest')].name" -o tsv   # expect nothing
 ```
 
 The CLI may print a traceback while formatting the error; the policy message
@@ -162,7 +152,7 @@ curl -s -H "Authorization: type%3Daad%26ver%3D1.0%26sig%3D$TOKEN" -H "x-ms-versi
 ```
 
 The resource names are in the deployment outputs
-(`az deployment sub show -n claimshub-dev --query properties.outputs`).
+(`az deployment group show -g rg-claimshub-$LEARNER_ID-dev -n claimshub-$LEARNER_ID-dev --query properties.outputs`).
 Service Bus and App Configuration stay reachable from outside by design
 (Microsoft Entra ID only).
 
@@ -209,7 +199,7 @@ the flag back to `false`.
 1–3 instances. Cosmos DB → `claims` container → **Scale**: autoscale, max
 1,000 RU/s.
 
-## 6. Second environment (Lab 3.3, optional during build)
+## 6. Second environment (Lab 3.3)
 
 ```bash
 ./scripts/deploy-infra.sh test
@@ -219,19 +209,37 @@ the flag back to `false`.
 ./scripts/teardown.sh test
 ```
 
-`test` differs only by its parameter file (name, no Cosmos DB free tier).
+`test.parameters.json` differs from dev: B1 instead of S1, no autoscale, no
+Private Endpoints. It's deliberately cheaper — a realistic non-production
+pattern, and it keeps the shared S1 quota free.
 
-## 7. Teardown between work sessions
+## 7. Teardown
+
+**Learners / between sessions:** `./scripts/teardown.sh <env>` deletes every
+resource in that environment but keeps the resource group and your access.
+Deleted Key Vaults and App Configuration stores stay soft-deleted; to redeploy
+the same environment afterwards, `export NAME_SEED=2` first.
+
+**Instructor, after the course:**
 
 ```bash
-./scripts/teardown.sh dev
+./scripts/instructor/course-teardown.sh learners.csv --remove-guests
 ```
 
-Deletes the resource group and purges the soft-deleted Key Vault and App
-Configuration store, so the next deployment can reuse the same names. The saved
-workbook is deleted too; re-import it from `monitoring/` when needed.
+Deletes every `rg-claimshub-*` group, purges soft-deleted Key Vaults and App
+Configuration stores, and removes the guest accounts.
 
 ---
+
+## Quota design (shared subscription)
+
+| Resource | Per person | Choice |
+|---|---|---|
+| App Service (dev) | 1 × S1 | Autoscale 1–2 instances (`autoscaleMaxInstances`) |
+| App Service (test) | 1 × B1 | Separate quota from S1; no autoscale |
+| Function apps | 2 per environment | 512 MB instances (regional Flex memory quota is 512,000 MB) |
+| Cosmos DB | 1 account per environment | No free tier (one per subscription) |
+| App Configuration | Developer tier | No per-subscription store limit |
 
 ## Design notes
 

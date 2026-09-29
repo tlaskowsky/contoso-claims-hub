@@ -39,12 +39,26 @@ Solution Architect course. Instructor material — not learner-facing.
 |---|---|
 | `infra/main.bicep` | Subscription-scope entry point; each section is labelled with its lab |
 | `infra/modules/` | One module per service |
-| `infra/parameters/` | `dev` and `test` parameter files (Lab 3.3) |
+| `infra/parameters/` | `dev` (S1, Private Endpoints) and `test` (B1, public) parameter files |
 | `src/api/` | Claims Intake API (Express, TypeScript) |
 | `src/functions-validation/` | `validateDocument` — Event Grid trigger, Service Bus output |
 | `src/functions-processing/` | `processClaim`, Durable `approvalOrchestrator` + activities, approval HTTP endpoints |
-| `scripts/` | Deploy, test, App Configuration change, teardown |
+| `scripts/` | Deploy, test, App Configuration change, teardown, package build |
+| `scripts/instructor/` | Class setup (guests, resource groups, roles), quota check, course teardown |
 | `tests/` | Sample claims (auto, home, health, commercial, low-value, legacy) and documents |
 | `queries/` | KQL: trace one claim, DLQ accumulation, stage latency |
 
 `LAB-BLANK(x.y)` comments mark candidate blanks for the learner start versions.
+
+## Quick start
+
+```bash
+export LEARNER_ID=s01                               # your learner ID
+./scripts/deploy-infra.sh dev
+./scripts/deploy-apps.sh dev
+./scripts/deploy-infra.sh dev --with-event-subscription
+./scripts/e2e-test.sh dev
+```
+
+Each learner deploys into resource groups prepared by the instructor
+(`rg-claimshub-<id>-dev` / `-test`). See `BUILD-GUIDE.md` for class setup.

@@ -13,6 +13,10 @@ param identityClientId string
 @description('Empty string = no VNet integration.')
 param subnetId string
 param appSettings object
+@description('Create the CPU autoscale rule (Standard tier or higher).')
+param enableAutoscale bool = true
+@description('Maximum instances when autoscaling.')
+param autoscaleMaxInstances int = 2
 
 resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: planName
@@ -66,7 +70,7 @@ resource site 'Microsoft.Web/sites@2024-04-01' = {
 }
 
 // LAB 3.2: CPU-based autoscale (requires Standard tier or higher)
-resource autoscale 'Microsoft.Insights/autoscalesettings@2022-10-01' = {
+resource autoscale 'Microsoft.Insights/autoscalesettings@2022-10-01' = if (enableAutoscale) {
   name: 'autoscale-${planName}'
   location: location
   tags: tags
@@ -78,7 +82,7 @@ resource autoscale 'Microsoft.Insights/autoscalesettings@2022-10-01' = {
         name: 'cpu-based'
         capacity: {
           minimum: '1'
-          maximum: '3'
+          maximum: string(autoscaleMaxInstances)
           default: '1'
         }
         rules: [

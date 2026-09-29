@@ -231,7 +231,7 @@
     }
   ],
   "fallbackResourceIds": [
-    "/subscriptions/<subscription-id>/resourceGroups/rg-claimshub-dev/providers/Microsoft.Insights/components/appi-claimshub-dev"
+    "/subscriptions/<subscription-id>/resourceGroups/rg-claimshub-<learner-id>-dev/providers/Microsoft.Insights/components/appi-claimshub-<learner-id>-dev"
   ],
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }

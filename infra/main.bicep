@@ -1,14 +1,21 @@
 // =============================================================================
 // Contoso Claims Hub - FINAL SOLUTION (end-of-course state)
-// Subscription-scope entry point. Lab mapping is marked on each section.
+// Resource-group-scope entry point: each learner deploys into resource groups
+// the instructor pre-created for them (rg-claimshub-<learnerId>-<env>).
+// Lab mapping is marked on each section.
 // =============================================================================
-targetScope = 'subscription'
+targetScope = 'resourceGroup'
 
 // -----------------------------------------------------------------------------
 // Parameters
 // -----------------------------------------------------------------------------
 @description('Short workload name used in all resource names.')
 param workloadName string = 'claimshub'
+
+@description('Learner ID, e.g. s01-s16 for students, i01 for the instructor.')
+@minLength(3)
+@maxLength(3)
+param learnerId string
 
 @description('Environment name. Drives resource names and tags.')
 @allowed([
@@ -18,11 +25,8 @@ param workloadName string = 'claimshub'
 ])
 param environmentName string
 
-@description('Azure region for all regional resources.')
-param location string
-
-@description('Value for the "owner" tag.')
-param owner string
+@description('Azure region for all regional resources. Defaults to the resource group location.')
+param location string = resourceGroup().location
 
 @description('Object ID of the deploying user: az ad signed-in-user show --query id -o tsv. Granted data-plane access for administration and verification.')
 param adminPrincipalId string
@@ -40,13 +44,29 @@ param lockDownDataPlane bool = true
 param deployEventSubscription bool = false
 
 @description('Cosmos DB free tier - only one account per subscription can use it.')
-param cosmosEnableFreeTier bool = true
+param cosmosEnableFreeTier bool = false
 
 @description('LAB 3.2: autoscale max RU/s for the claims container.')
 param cosmosAutoscaleMaxThroughput int = 1000
 
 @description('App Service plan SKU. Must be Standard (S1) or higher for autoscale.')
-param appServicePlanSku string = 'P0v3'
+param appServicePlanSku string = 'S1'
+
+@description('LAB 3.2: autoscale the App Service plan (requires Standard or higher; off for Basic).')
+param enableAutoscale bool = true
+
+@description('LAB 3.2: maximum App Service instances when autoscaling (kept low to protect the shared quota).')
+@minValue(1)
+@maxValue(3)
+param autoscaleMaxInstances int = 2
+
+@description('Memory per Function app instance on Flex Consumption (MB). 512 keeps the class well inside the regional memory quota.')
+@allowed([
+  512
+  2048
+  4096
+])
+param functionInstanceMemoryMB int = 512
 
 @description('App Configuration tier.')
 @allowed([
@@ -64,29 +84,29 @@ param policyAdminApiKey string = newGuid()
 // -----------------------------------------------------------------------------
 var w = workloadName
 var e = environmentName
-var suffix = take(uniqueString(subscription().subscriptionId, workloadName, environmentName, nameSeed), 5)
+var suffix = take(uniqueString(resourceGroup().id, nameSeed), 5)
+var l = learnerId
 
 var names = {
-  rg: 'rg-${w}-${e}'
-  vnet: 'vnet-${w}-${e}'
-  log: 'log-${w}-${e}'
-  appi: 'appi-${w}-${e}'
-  kv: 'kv-${w}-${e}-${suffix}'
-  appcs: 'appcs-${w}-${e}-${suffix}'
-  cosmos: 'cosmos-${w}-${e}-${suffix}'
-  stDocs: 'stdocs${e}${suffix}'
-  stFunc: 'stfunc${e}${suffix}'
-  sb: 'sbns-${w}-${e}-${suffix}'
-  apiPlan: 'asp-${w}-api-${e}'
-  api: 'app-${w}-api-${e}-${suffix}'
-  valPlan: 'asp-${w}-val-${e}'
-  funcVal: 'func-${w}-val-${e}-${suffix}'
-  procPlan: 'asp-${w}-proc-${e}'
-  funcProc: 'func-${w}-proc-${e}-${suffix}'
-  evgt: 'evgt-${w}-docs-${e}'
-  idApi: 'id-${w}-api-${e}'
-  idVal: 'id-${w}-val-${e}'
-  idProc: 'id-${w}-proc-${e}'
+  vnet: 'vnet-${w}-${l}-${e}'
+  log: 'log-${w}-${l}-${e}'
+  appi: 'appi-${w}-${l}-${e}'
+  kv: 'kv-${l}-${e}-${suffix}'
+  appcs: 'appcs-${w}-${l}-${e}-${suffix}'
+  cosmos: 'cosmos-${w}-${l}-${e}-${suffix}'
+  stDocs: 'stdocs${l}${e}${suffix}'
+  stFunc: 'stfunc${l}${e}${suffix}'
+  sb: 'sbns-${w}-${l}-${e}-${suffix}'
+  apiPlan: 'asp-${w}-api-${l}-${e}'
+  api: 'app-${w}-api-${l}-${e}-${suffix}'
+  valPlan: 'asp-${w}-val-${l}-${e}'
+  funcVal: 'func-${w}-val-${l}-${e}-${suffix}'
+  procPlan: 'asp-${w}-proc-${l}-${e}'
+  funcProc: 'func-${w}-proc-${l}-${e}-${suffix}'
+  evgt: 'evgt-${w}-docs-${l}-${e}'
+  idApi: 'id-${w}-api-${l}-${e}'
+  idVal: 'id-${w}-val-${l}-${e}'
+  idProc: 'id-${w}-proc-${l}-${e}'
 }
 
 var documentsContainer = 'claim-documents'
@@ -95,7 +115,8 @@ var processingQueue = 'claims-processing'
 var tags = {
   workload: workloadName
   environment: environmentName
-  owner: owner
+  owner: learnerId
+  learner: learnerId
   managedBy: 'bicep'
 }
 
@@ -117,17 +138,10 @@ var roles = {
 }
 
 // -----------------------------------------------------------------------------
-// LAB 1.1 - Resource group, governance, identities
+// LAB 1.1 - Governance and identities (resource group is pre-created)
 // -----------------------------------------------------------------------------
-resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: names.rg
-  location: location
-  tags: tags
-}
-
 module governance 'modules/governance.bicep' = {
   name: 'governance'
-  scope: rg
   params: {
     location: location
     inheritedTagNames: [
@@ -145,7 +159,6 @@ module governance 'modules/governance.bicep' = {
 
 module idApi 'modules/identity.bicep' = {
   name: 'identity-api'
-  scope: rg
   params: {
     name: names.idApi
     location: location
@@ -155,7 +168,6 @@ module idApi 'modules/identity.bicep' = {
 
 module idVal 'modules/identity.bicep' = {
   name: 'identity-validation'
-  scope: rg
   params: {
     name: names.idVal
     location: location
@@ -165,7 +177,6 @@ module idVal 'modules/identity.bicep' = {
 
 module idProc 'modules/identity.bicep' = {
   name: 'identity-processing'
-  scope: rg
   params: {
     name: names.idProc
     location: location
@@ -178,7 +189,6 @@ module idProc 'modules/identity.bicep' = {
 // -----------------------------------------------------------------------------
 module network 'modules/network.bicep' = {
   name: 'network'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -191,7 +201,6 @@ module network 'modules/network.bicep' = {
 // -----------------------------------------------------------------------------
 module monitoring 'modules/monitoring.bicep' = {
   name: 'monitoring'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -210,7 +219,6 @@ module monitoring 'modules/monitoring.bicep' = {
 // -----------------------------------------------------------------------------
 module keyVault 'modules/keyvault.bicep' = {
   name: 'keyvault'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -226,7 +234,6 @@ module keyVault 'modules/keyvault.bicep' = {
 
 module appConfig 'modules/appconfig.bicep' = {
   name: 'appconfig'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -245,7 +252,6 @@ module appConfig 'modules/appconfig.bicep' = {
 // -----------------------------------------------------------------------------
 module cosmos 'modules/cosmos.bicep' = {
   name: 'cosmos'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -267,7 +273,6 @@ module cosmos 'modules/cosmos.bicep' = {
 // -----------------------------------------------------------------------------
 module storageDocs 'modules/storage.bicep' = {
   name: 'storage-documents'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -287,7 +292,6 @@ module storageDocs 'modules/storage.bicep' = {
 
 module storageFunc 'modules/storage.bicep' = {
   name: 'storage-functions'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -313,7 +317,6 @@ module storageFunc 'modules/storage.bicep' = {
 // -----------------------------------------------------------------------------
 module serviceBus 'modules/servicebus.bicep' = {
   name: 'servicebus'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -344,15 +347,14 @@ var privateEndpointDefs = [
 
 module privateEndpoints 'modules/privateendpoint.bicep' = [for pe in privateEndpointDefs: if (lockDownDataPlane) {
   name: 'pe-${pe.groupId}-${pe.resource}'
-  scope: rg
   params: {
     name: 'pe-${pe.resource}-${toLower(pe.groupId)}'
     location: location
     tags: tags
     subnetId: network.outputs.subnetIds.privateEndpoints
-    targetResourceId: resourceId(subscription().subscriptionId, names.rg, pe.type, pe.resource)
+    targetResourceId: resourceId(pe.type, pe.resource)
     groupId: pe.groupId
-    privateDnsZoneId: resourceId(subscription().subscriptionId, names.rg, 'Microsoft.Network/privateDnsZones', pe.zone)
+    privateDnsZoneId: resourceId('Microsoft.Network/privateDnsZones', pe.zone)
   }
   dependsOn: [
     cosmos
@@ -368,13 +370,14 @@ module privateEndpoints 'modules/privateendpoint.bicep' = [for pe in privateEndp
 // -----------------------------------------------------------------------------
 module api 'modules/appservice.bicep' = {
   name: 'app-api'
-  scope: rg
   params: {
     location: location
     tags: tags
     planName: names.apiPlan
     appName: names.api
     skuName: appServicePlanSku
+    enableAutoscale: enableAutoscale
+    autoscaleMaxInstances: autoscaleMaxInstances
     identityId: idApi.outputs.id
     identityClientId: idApi.outputs.clientId
     subnetId: lockDownDataPlane ? network.outputs.subnetIds.app : ''
@@ -399,7 +402,6 @@ module api 'modules/appservice.bicep' = {
 // -----------------------------------------------------------------------------
 module funcValidation 'modules/functionapp.bicep' = {
   name: 'func-validation'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -409,6 +411,7 @@ module funcValidation 'modules/functionapp.bicep' = {
     identityClientId: idVal.outputs.clientId
     storageAccountName: storageFunc.outputs.name
     deploymentContainerName: 'deploy-validation'
+    instanceMemoryMB: functionInstanceMemoryMB
     subnetId: lockDownDataPlane ? network.outputs.subnetIds.funcValidation : ''
     appInsightsConnectionString: monitoring.outputs.connectionString
     appSettings: {
@@ -430,7 +433,6 @@ module funcValidation 'modules/functionapp.bicep' = {
 // -----------------------------------------------------------------------------
 module funcProcessing 'modules/functionapp.bicep' = {
   name: 'func-processing'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -440,6 +442,7 @@ module funcProcessing 'modules/functionapp.bicep' = {
     identityClientId: idProc.outputs.clientId
     storageAccountName: storageFunc.outputs.name
     deploymentContainerName: 'deploy-processing'
+    instanceMemoryMB: functionInstanceMemoryMB
     subnetId: lockDownDataPlane ? network.outputs.subnetIds.funcProcessing : ''
     appInsightsConnectionString: monitoring.outputs.connectionString
     appSettings: {
@@ -462,7 +465,6 @@ module funcProcessing 'modules/functionapp.bicep' = {
 // -----------------------------------------------------------------------------
 module eventGrid 'modules/eventgrid.bicep' = {
   name: 'eventgrid'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -479,7 +481,6 @@ module eventGrid 'modules/eventgrid.bicep' = {
 // -----------------------------------------------------------------------------
 module alerts 'modules/alerts.bicep' = {
   name: 'alerts'
-  scope: rg
   params: {
     location: location
     tags: tags
@@ -494,7 +495,7 @@ module alerts 'modules/alerts.bicep' = {
 // -----------------------------------------------------------------------------
 // Outputs (consumed by the scripts in /scripts)
 // -----------------------------------------------------------------------------
-output resourceGroupName string = rg.name
+output resourceGroupName string = resourceGroup().name
 output apiAppName string = api.outputs.name
 output apiUrl string = api.outputs.url
 output validationFunctionAppName string = funcValidation.outputs.name

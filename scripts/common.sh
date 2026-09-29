@@ -3,10 +3,18 @@
 set -euo pipefail
 
 ENV_NAME="${1:-dev}"
-DEPLOYMENT_NAME="claimshub-${ENV_NAME}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PARAM_FILE="$REPO_ROOT/infra/parameters/${ENV_NAME}.parameters.json"
-RG="rg-claimshub-${ENV_NAME}"
+
+# Every learner has an ID (s01-s16, instructor i01), set once per shell:
+#   export LEARNER_ID=s01        (add it to ~/.bashrc to keep it)
+LEARNER_ID="${LEARNER_ID:-}"
+if [[ ! "$LEARNER_ID" =~ ^[a-z][0-9]{2}$ ]]; then
+  echo "Set your learner ID first, e.g.:  export LEARNER_ID=s01" >&2
+  exit 1
+fi
+RG="rg-claimshub-${LEARNER_ID}-${ENV_NAME}"
+DEPLOYMENT_NAME="claimshub-${LEARNER_ID}-${ENV_NAME}"
 
 # Look up a deployed resource by type and name prefix in the environment's
 # resource group. This does not depend on the deployment record, so it works

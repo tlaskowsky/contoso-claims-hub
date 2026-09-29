@@ -14,3 +14,6 @@ local.settings.json
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
+
+# Built application packages (published as GitHub release assets)
+packages/

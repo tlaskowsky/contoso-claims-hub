@@ -1,0 +1,5 @@
+# learnerId,email
+# "self" = the signed-in instructor account (no invitation is sent)
+i01,self
+s01,learner01@example.com
+s02,learner02@example.com

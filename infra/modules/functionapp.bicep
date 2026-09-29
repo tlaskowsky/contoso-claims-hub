@@ -18,6 +18,8 @@ param deploymentContainerName string
 param subnetId string
 param appInsightsConnectionString string
 param appSettings object = {}
+@description('Memory per instance (MB): 512, 2048 or 4096.')
+param instanceMemoryMB int = 512
 
 resource st 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
@@ -80,8 +82,8 @@ resource site 'Microsoft.Web/sites@2024-04-01' = {
         }
       }
       scaleAndConcurrency: {
-        maximumInstanceCount: 40
-        instanceMemoryMB: 2048
+        maximumInstanceCount: 40 // platform minimum
+        instanceMemoryMB: instanceMemoryMB
       }
       runtime: {
         name: 'node'
