@@ -46,6 +46,24 @@ invitation email before class. Keep `learners.csv` out of the repository.
 provider registration. The App Service tiers are the tight ones: every dev
 environment needs 1 S1 instance, every test environment 1 B1 instance.
 
+**Pre-create the App Service plans — the day before class:**
+
+```bash
+./scripts/instructor/precreate-plans.sh learners.csv      # ~2.5 hours for 17 learners (dev + test)
+```
+
+Azure **throttles App Service plan creation** per subscription and region
+(stricter for new subscriptions; a throttle can last up to 48 hours). Seventeen
+learners each deploying three plans at once would hit it. The script creates
+every plan in advance, one at a time with a pause between each, and waits out
+any throttle. Learners' deployments then only *update* existing plans.
+Flex Consumption plans cost nothing idle; S1/B1 plans are billed from
+creation — hence the day before. If Azure throttles anyway, open a support
+ticket (Service and subscription limits → App Service) describing the class.
+
+Avoid repeated build/teardown cycles in the training subscription in the days
+before class — every plan created counts toward the throttle.
+
 **Publish the application packages** (after any code change):
 
 ```bash
@@ -72,6 +90,7 @@ export LEARNER_ID=s01                     # your ID; add to ~/.bashrc to keep it
 | `Forbidden` on App Configuration `keyValues` | Data Owner role not yet effective | Wait 3–5 minutes, rerun |
 | `PrincipalNotFound` on a role assignment | A new managed identity hasn't replicated yet | Rerun |
 | `SubscriptionIsOverQuotaForSku` | App Service quota exhausted | Instructor: `check-quotas.sh` |
+| Plans stay "Running" for many minutes; `App Service Plan Create operation is throttled` | Plan-creation throttle | Plans should have been pre-created (`precreate-plans.sh`); otherwise wait, don't retry repeatedly |
 | "Virtual network resource not found" on a DNS link | Stale state from a recently deleted environment | Wait a few minutes, rerun |
 
 Reruns are always safe.
@@ -210,7 +229,10 @@ the flag back to `false`.
 ```
 
 `test.parameters.json` differs from dev: B1 instead of S1, no autoscale, no
-Private Endpoints. It's deliberately cheaper — a realistic non-production
+Private Endpoints. Its plans are pre-created too (`precreate-plans.sh`).
+**Fallback:** if a learner's test deployment is still running after 20
+minutes, move them on to the capstone — the point of the lab (same code,
+different parameter file) is made either way. It's deliberately cheaper — a realistic non-production
 pattern, and it keeps the shared S1 quota free.
 
 ## 7. Teardown
@@ -266,6 +288,11 @@ Deliberate choices in the reference solution, and the reasons behind them.
 - **The API answers App Service platform probes** (`GET /` for Always On, the
   container warm-up probe) so they don't appear as failed requests, and names
   request telemetry by route (`GET /claims/:claimId`).
+- **Autoscale reacts only to sustained load** (CPU > 80% over 15 minutes).
+  A new plan's provisioning spike otherwise triggered a scale-out to 2
+  instances, doubling S1 quota use.
+- **The first document upload can take up to a minute** while the validation
+  Function app cold-starts from zero; later ones take seconds.
 - **Flex Consumption apps report no `defaultHostName`** through
   `az functionapp show`; scripts build the hostname from the app name.
 
