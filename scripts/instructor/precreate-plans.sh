@@ -5,9 +5,11 @@
 # up to 48 hours). When learners deploy, their plans already exist, so the
 # deployment only *updates* them.
 #
-#   ./scripts/instructor/precreate-plans.sh learners.csv            # dev + test plans
-#   ./scripts/instructor/precreate-plans.sh learners.csv dev        # dev plans only
-#   DELAY=120 ./scripts/instructor/precreate-plans.sh learners.csv  # seconds between creations (default 90)
+#   ./scripts/instructor/precreate-plans.sh learners.csv                # all plans, dev + test
+#   ./scripts/instructor/precreate-plans.sh learners.csv all flex       # Flex Consumption plans only (free while idle: do these early)
+#   ./scripts/instructor/precreate-plans.sh learners.csv all appservice # S1/B1 plans only (billed: do these the day before class)
+#   ./scripts/instructor/precreate-plans.sh learners.csv dev            # dev environments only
+#   DELAY=120 ./scripts/instructor/precreate-plans.sh learners.csv      # seconds between creations (default 90)
 #
 # Cost: Flex Consumption plans cost nothing while idle. S1 (dev) and B1 (test)
 # plans are billed from creation, so run this the DAY BEFORE class.
@@ -16,8 +18,9 @@
 # Names, SKUs and properties must match infra/modules/appservice.bicep and
 # functionapp.bicep, and infra/main.bicep's naming (asp-claimshub-<role>-<id>-<env>).
 set -uo pipefail
-CSV="${1:?Usage: precreate-plans.sh learners.csv [dev|test|all]}"
+CSV="${1:?Usage: precreate-plans.sh learners.csv [dev|test|all] [flex|appservice|both]}"
 WHICH="${2:-all}"
+KIND="${3:-both}"
 DELAY="${DELAY:-90}"
 SUB=$(az account show --query id -o tsv)
 API="2024-04-01"
@@ -50,8 +53,11 @@ while IFS=, read -r id _; do
     loc=$(az group show -n "$rg" --query location -o tsv 2>/dev/null) || { warn "$rg not found - run setup-class.sh first"; continue; }
     tags="{\"workload\":\"claimshub\",\"environment\":\"$env\",\"owner\":\"$id\",\"learner\":\"$id\",\"managedBy\":\"bicep\"}"
     echo "== $id $env ($loc)"
-    create_plan "$rg" "asp-claimshub-api-$id-$env" \
-      "{\"location\":\"$loc\",\"kind\":\"linux\",\"sku\":{\"name\":\"$(sku_for $env)\"},\"properties\":{\"reserved\":true},\"tags\":$tags}" || exit 1
+    if [[ "$KIND" != "flex" ]]; then
+      create_plan "$rg" "asp-claimshub-api-$id-$env" \
+        "{\"location\":\"$loc\",\"kind\":\"linux\",\"sku\":{\"name\":\"$(sku_for $env)\"},\"properties\":{\"reserved\":true},\"tags\":$tags}" || exit 1
+    fi
+    [[ "$KIND" == "appservice" ]] && continue
     for role in val proc; do
       create_plan "$rg" "asp-claimshub-$role-$id-$env" \
         "{\"location\":\"$loc\",\"kind\":\"functionapp\",\"sku\":{\"name\":\"FC1\",\"tier\":\"FlexConsumption\"},\"properties\":{\"reserved\":true},\"tags\":$tags}" || exit 1
