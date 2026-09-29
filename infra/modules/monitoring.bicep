@@ -31,7 +31,8 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
     WorkspaceResourceId: workspace.id
-    DisableLocalAuth: true
+    // LAB-BLANK(3.1): accept telemetry from Microsoft Entra identities only - disable instrumentation-key (local) authentication
+    DisableLocalAuth: true // @blank 3.1
   }
 }
 

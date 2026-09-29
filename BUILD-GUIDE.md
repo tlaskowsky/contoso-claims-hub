@@ -276,6 +276,13 @@ Deliberate choices in the reference solution, and the reasons behind them.
   through Resource Management Private Link. Production: deploy configuration
   from a pipeline agent inside the network.
 - **Two Function apps:** validation, and processing + Durable approval.
+- **Incremental states run cleanly:** the API reports services added in later
+  labs as "not configured yet"; validated claims wait in DocumentsValidated
+  until Service Bus exists (Lab 2.2); the approval workflow stays off until
+  `APPROVAL_WORKFLOW_ENABLED` is set (Lab 2.3); telemetry starts in Lab 3.1.
+- **Cosmos DB starts on manual 400 RU/s**; Lab 3.2 migrates the container to
+  autoscale (`az cosmosdb sql container throughput migrate`) *before* the Bicep
+  switches to `autoscaleSettings` — ARM can't change the throughput type itself.
 - **Documents are uploaded through the API**, not directly to Storage, so
   uploads keep working after the data plane is locked down.
 - **Managed-identity access is verified through the API's

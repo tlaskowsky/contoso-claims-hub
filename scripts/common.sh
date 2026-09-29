@@ -4,7 +4,11 @@ set -euo pipefail
 
 ENV_NAME="${1:-dev}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PARAM_FILE="$REPO_ROOT/infra/parameters/${ENV_NAME}.parameters.json"
+
+# Learners work in workspace/infra (filled by start-lab.sh); without a
+# workspace, the scripts use the complete reference solution in infra/.
+if [[ -f "$REPO_ROOT/workspace/infra/main.bicep" ]]; then INFRA_DIR="$REPO_ROOT/workspace/infra"; else INFRA_DIR="$REPO_ROOT/infra"; fi
+PARAM_FILE="$INFRA_DIR/parameters/${ENV_NAME}.parameters.json"
 
 # Every learner has an ID (s01-s16, instructor i01), set once per shell:
 #   export LEARNER_ID=s01        (add it to ~/.bashrc to keep it)

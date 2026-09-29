@@ -33,7 +33,8 @@ resource store 'Microsoft.AppConfiguration/configurationStores@2024-05-01' = {
     name: skuName
   }
   properties: {
-    disableLocalAuth: true
+    // LAB-BLANK(1.2): turn off access keys so App Configuration accepts Microsoft Entra ID only
+    disableLocalAuth: true // @blank 1.2
     publicNetworkAccess: 'Enabled'
     dataPlaneProxy: {
       authenticationMode: 'Pass-through'

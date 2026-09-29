@@ -33,13 +33,14 @@ resource inheritTag 'Microsoft.Authorization/policyAssignments@2023-04-01' = [fo
   }
 }]
 
-// LAB-BLANK(1.1): role assignment that lets the policy identity apply Modify
+// Role assignment that lets each policy's managed identity apply the Modify effect
 resource inheritTagRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for (tagName, i) in inheritedTagNames: {
   name: guid(resourceGroup().id, 'inherit-tag', tagName)
   properties: {
-    roleDefinitionId: contributorRoleId
-    principalId: inheritTag[i].identity.principalId
-    principalType: 'ServicePrincipal'
+    // LAB-BLANK(1.1): grant the policy's managed identity (inheritTag[i].identity.principalId, a 'ServicePrincipal') the role contributorRoleId
+    roleDefinitionId: contributorRoleId // @blank 1.1
+    principalId: inheritTag[i].identity.principalId // @blank 1.1
+    principalType: 'ServicePrincipal' // @blank 1.1
   }
 }]
 

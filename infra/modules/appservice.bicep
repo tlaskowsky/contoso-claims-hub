@@ -69,7 +69,8 @@ resource site 'Microsoft.Web/sites@2024-04-01' = {
   }
 }
 
-// LAB 3.2: CPU-based autoscale (requires Standard tier or higher)
+// LAB 3.2: CPU-based autoscale (requires Standard tier or higher).
+// Scale out: CPU > 80% averaged over 15 minutes. Scale in: CPU < 30% over 10 minutes.
 resource autoscale 'Microsoft.Insights/autoscalesettings@2022-10-01' = if (enableAutoscale) {
   name: 'autoscale-${planName}'
   location: location
@@ -92,10 +93,13 @@ resource autoscale 'Microsoft.Insights/autoscalesettings@2022-10-01' = if (enabl
               metricResourceUri: plan.id
               timeGrain: 'PT1M'
               statistic: 'Average'
-              timeWindow: 'PT5M'
+              // Sustained load only: a new plan's provisioning spike or an app
+              // cold start never lasts 15 minutes, a real load test does.
+              // LAB-BLANK(3.2): scale out when average CPU is greater than 80 percent over a 15-minute window (timeWindow 'PT15M')
+              timeWindow: 'PT15M' // @blank 3.2
               timeAggregation: 'Average'
-              operator: 'GreaterThan'
-              threshold: 70
+              operator: 'GreaterThan' // @blank 3.2
+              threshold: 80 // @blank 3.2
             }
             scaleAction: {
               direction: 'Increase'

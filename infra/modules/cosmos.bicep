@@ -9,8 +9,8 @@ param tags object
 param name string
 param publicNetworkAccess bool
 param enableFreeTier bool
-@description('LAB 3.2: autoscale maximum RU/s for the claims container.')
-param autoscaleMaxThroughput int
+@description('LAB 3.2: autoscale maximum RU/s for the claims container. 0 = manual 400 RU/s (before Lab 3.2).')
+param autoscaleMaxThroughput int = 0
 @description('Principal IDs granted Cosmos DB Built-in Data Contributor.')
 param dataContributorPrincipalIds array
 
@@ -57,20 +57,22 @@ resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
   properties: {
     resource: {
       id: containerName
-      // LAB-BLANK(1.3): partition key choice
-      partitionKey: {
-        paths: [
-          '/claimId'
-        ]
-        kind: 'Hash'
-        version: 2
-      }
+      // LAB-BLANK(1.3): choose the partition key - every claim is read and written by its claimId (paths ['/claimId'], kind 'Hash', version 2)
+      partitionKey: { // @blank 1.3
+        paths: [ // @blank 1.3
+          '/claimId' // @blank 1.3
+        ] // @blank 1.3
+        kind: 'Hash' // @blank 1.3
+        version: 2 // @blank 1.3
+      } // @blank 1.3
     }
-    options: {
-      // LAB-BLANK(3.2): autoscale
+    // LAB 3.2: manual throughput first; autoscale once the container has been migrated
+    options: autoscaleMaxThroughput > 0 ? {
       autoscaleSettings: {
         maxThroughput: autoscaleMaxThroughput
       }
+    } : {
+      throughput: 400
     }
   }
 }

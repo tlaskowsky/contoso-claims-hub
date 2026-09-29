@@ -9,7 +9,8 @@ param location string
 param tags object
 param name string
 param queueName string
-param workspaceId string
+@description('Log Analytics workspace for metrics. Empty until Lab 3.1.')
+param workspaceId string = ''
 param roleAssignments array = []
 
 resource ns 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
@@ -30,11 +31,11 @@ resource queue 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
   parent: ns
   name: queueName
   properties: {
-    // LAB-BLANK(2.2): delivery-count limit and dead-lettering
-    maxDeliveryCount: 3
+    // LAB-BLANK(2.2): dead-letter a message after 3 failed deliveries (maxDeliveryCount), and also when it expires (deadLetteringOnMessageExpiration)
+    maxDeliveryCount: 3 // @blank 2.2
+    deadLetteringOnMessageExpiration: true // @blank 2.2
     lockDuration: 'PT1M'
     defaultMessageTimeToLive: 'P7D'
-    deadLetteringOnMessageExpiration: true
   }
 }
 
@@ -49,7 +50,7 @@ resource ra 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for r in rol
 }]
 
 // Send namespace metrics to Log Analytics (used by the DLQ KQL query) [LAB 3.1]
-resource diag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource diag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(workspaceId)) {
   name: 'to-log-analytics'
   scope: ns
   properties: {

@@ -35,13 +35,13 @@ resource sub 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15' = 
         preferredBatchSizeInKilobytes: 64
       }
     }
-    // LAB-BLANK(2.1): event type and subject filters
-    filter: {
-      includedEventTypes: [
-        'Microsoft.Storage.BlobCreated'
-      ]
-      subjectBeginsWith: '/blobServices/default/containers/${documentsContainerName}/'
-    }
+    // LAB-BLANK(2.1): deliver only BlobCreated events (includedEventTypes) for blobs in the documents container (subjectBeginsWith '/blobServices/default/containers/<container>/')
+    filter: { // @blank 2.1
+      includedEventTypes: [ // @blank 2.1
+        'Microsoft.Storage.BlobCreated' // @blank 2.1
+      ] // @blank 2.1
+      subjectBeginsWith: '/blobServices/default/containers/${documentsContainerName}/' // @blank 2.1
+    } // @blank 2.1
     eventDeliverySchema: 'EventGridSchema'
     retryPolicy: {
       maxDeliveryAttempts: 10

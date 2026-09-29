@@ -33,6 +33,13 @@ export async function processClaim(message: unknown, context: InvocationContext)
     }
   }
 
+  // Lab 2.2 -> 2.3: the Durable approval workflow is off until an app setting switches it on.
+  if ((process.env.APPROVAL_WORKFLOW_ENABLED ?? 'false').toLowerCase() !== 'true') {
+    await updateClaim(claimId, { status: 'Processed' }, `Policy ${claim.policyNumber} verified; approval workflow not enabled yet`);
+    context.log(`Claim ${claimId}: processed (approval workflow disabled)`);
+    return;
+  }
+
   // Idempotency: commands are delivered at least once, and every validated
   // document produces a command. Start the workflow only once per claim.
   const client = df.getClient(context);
@@ -49,7 +56,8 @@ export async function processClaim(message: unknown, context: InvocationContext)
   }
 
   await updateClaim(claimId, { status: 'Processing' }, `Policy ${claim.policyNumber} verified; approval workflow starting`);
-  await client.startNew('approvalOrchestrator', { instanceId: claimId, input: { claimId } });
+  const approvalTimeoutHours = Number(process.env.APPROVAL_TIMEOUT_HOURS ?? '72') || 72;
+  await client.startNew('approvalOrchestrator', { instanceId: claimId, input: { claimId, approvalTimeoutHours } });
   context.log(`Claim ${claimId}: approval workflow started`);
 }
 

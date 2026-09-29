@@ -124,7 +124,9 @@ app.get(
         return `secret PolicyAdminApiKey present (${secret.value?.length ?? 0} characters)`;
       }),
       check('appConfiguration', async () => `ClaimsHub:MaxClaimAmount = ${await getSetting('ClaimsHub:MaxClaimAmount', '(not set)')}`),
-      check('blobStorage', async () => ((await documentsContainer().exists()) ? 'documents container reachable' : 'documents container missing')),
+      process.env.DOCUMENTS_BLOB_ENDPOINT
+        ? check('blobStorage', async () => ((await documentsContainer().exists()) ? 'documents container reachable' : 'documents container missing'))
+        : Promise.resolve({ name: 'blobStorage', ok: true, detail: 'not configured yet (added in Lab 2.1)' }),
     ]);
     const ok = checks.every((c) => c.ok);
     res.status(ok ? 200 : 503).json({ ok, checks });
@@ -189,6 +191,9 @@ app.post(
   express.raw({ type: () => true, limit: '10mb' }),
   asyncRoute(async (req, res) => {
     const { claimId } = req.params;
+    if (!process.env.DOCUMENTS_BLOB_ENDPOINT) {
+      return res.status(503).json({ error: 'Document storage is not configured yet (it is added in Lab 2.1).' });
+    }
     const fileName = String(req.query.fileName ?? '').trim();
     const contentType = String(req.headers['content-type'] ?? 'application/octet-stream').split(';')[0].trim().toLowerCase();
     const body = req.body as Buffer;

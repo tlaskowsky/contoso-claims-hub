@@ -73,6 +73,7 @@ export const openApiSpec = {
           '202': { description: 'Accepted; validation runs asynchronously' },
           '400': { description: 'Missing file name or empty body', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
           '404': { description: 'Claim not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '503': { description: 'Document storage not configured yet (added in Lab 2.1)', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
         },
       },
     },
@@ -109,7 +110,7 @@ export const openApiSpec = {
           claimId: { type: 'string' },
           status: {
             type: 'string',
-            enum: ['Submitted', 'DocumentsValidated', 'DocumentRejected', 'Processing', 'PendingApproval', 'AutoApproving', 'Approved', 'Rejected'],
+            enum: ['Submitted', 'DocumentsValidated', 'DocumentRejected', 'Processing', 'Processed', 'PendingApproval', 'AutoApproving', 'Approved', 'Rejected'],
           },
           customerId: { type: 'string' },
           policyNumber: { type: 'string' },

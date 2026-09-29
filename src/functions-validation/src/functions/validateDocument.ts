@@ -1,15 +1,21 @@
 // Event Grid (BlobCreated) -> validate the uploaded document -> record the
 // result in Cosmos DB -> on success, send a ClaimReadyForProcessing command
-// to the Service Bus queue (output binding, identity-based connection).
-import { app, EventGridEvent, InvocationContext, output } from '@azure/functions';
+// to the Service Bus queue (identity-based). Until Service Bus exists (Lab 2.2),
+// validated claims simply wait in DocumentsValidated.
+import { app, EventGridEvent, InvocationContext } from '@azure/functions';
+import { ServiceBusClient, ServiceBusSender } from '@azure/service-bus';
 import { BlobClient } from '@azure/storage-blob';
 import { PatchOperationType } from '@azure/cosmos';
 import { claimsContainer, credential } from '../shared/azure';
 
-const processingQueue = output.serviceBusQueue({
-  queueName: 'claims-processing',
-  connection: 'ServiceBusConnection',
-});
+const QUEUE_NAME = 'claims-processing';
+let sender: ServiceBusSender | undefined;
+function processingQueue(): ServiceBusSender | undefined {
+  const namespace = process.env.ServiceBusConnection__fullyQualifiedNamespace;
+  if (!namespace) return undefined; // Service Bus is added in Lab 2.2
+  if (!sender) sender = new ServiceBusClient(namespace, credential).createSender(QUEUE_NAME);
+  return sender;
+}
 
 // Allowed content types and the "magic bytes" each file must start with.
 const SIGNATURES: Record<string, number[]> = {
@@ -93,14 +99,22 @@ export async function validateDocument(event: EventGridEvent, context: Invocatio
   }
 
   if (valid) {
-    context.extraOutputs.set(processingQueue, { type: 'ClaimReadyForProcessing', claimId, documentName: fileName, validatedAt: now });
-    context.log(`Claim ${claimId}: ClaimReadyForProcessing sent to claims-processing`);
+    const queue = processingQueue();
+    if (queue) {
+      await queue.sendMessages({
+        body: { type: 'ClaimReadyForProcessing', claimId, documentName: fileName, validatedAt: now },
+        contentType: 'application/json',
+        subject: 'ClaimReadyForProcessing',
+      });
+      context.log(`Claim ${claimId}: ClaimReadyForProcessing sent to ${QUEUE_NAME}`);
+    } else {
+      context.log(`Claim ${claimId}: validated; Service Bus not configured yet, so processing waits for Lab 2.2`);
+    }
   } else {
     context.warn(`Claim ${claimId}: document ${fileName} rejected (${problems.join('; ')})`);
   }
 }
 
 app.eventGrid('validateDocument', {
-  extraOutputs: [processingQueue],
   handler: validateDocument,
 });

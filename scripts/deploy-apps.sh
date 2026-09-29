@@ -8,9 +8,11 @@ source "$(dirname "$0")/common.sh" "${1:-dev}"
 PACKAGES_URL="${PACKAGES_URL:-https://github.com/tlaskowsky/contoso-claims-hub/releases/latest/download}"
 PKG_DIR="$REPO_ROOT/packages"
 
-API_APP=$(output apiAppName);                 require "$API_APP" "API App Service"
-VAL_APP=$(output validationFunctionAppName);  require "$VAL_APP" "validation Function app"
-PROC_APP=$(output processingFunctionAppName); require "$PROC_APP" "processing Function app"
+# Deploy whichever apps exist so far (the API from Lab 1.3, validation from 2.1, processing from 2.2).
+API_APP=$(output apiAppName)
+VAL_APP=$(output validationFunctionAppName)
+PROC_APP=$(output processingFunctionAppName)
+[[ -z "$API_APP$VAL_APP$PROC_APP" ]] && { fail "No apps found in $RG - deploy the infrastructure first."; exit 1; }
 
 # --- Get the packages ---------------------------------------------------------------
 if [[ "${2:-}" == "--from-source" ]]; then
@@ -35,13 +37,16 @@ retry() { # <description> <command...>
 }
 
 # --- Claims Intake API (App Service) ------------------------------------------------
-step "Deploying Claims Intake API to $API_APP"
-retry "API deployment" az webapp deploy -g "$RG" -n "$API_APP" --src-path "$PKG_DIR/api.zip" --type zip
-ok "API deployed"
+if [[ -n "$API_APP" ]]; then
+  step "Deploying Claims Intake API to $API_APP"
+  retry "API deployment" az webapp deploy -g "$RG" -n "$API_APP" --src-path "$PKG_DIR/api.zip" --type zip
+  ok "API deployed"
+fi
 
 # --- Function apps (Flex Consumption) -----------------------------------------------
 for pair in "functions-validation:$VAL_APP" "functions-processing:$PROC_APP"; do
   pkg="${pair%%:*}"; app="${pair##*:}"
+  [[ -z "$app" ]] && continue
   step "Deploying $pkg to $app"
   retry "$pkg deployment" az functionapp deployment source config-zip -g "$RG" -n "$app" --src "$PKG_DIR/$pkg.zip"
   ok "$app deployed"
@@ -49,6 +54,7 @@ done
 
 step "Functions registered (may take a minute to appear)"
 for app in "$VAL_APP" "$PROC_APP"; do
+  [[ -z "$app" ]] && continue
   for i in 1 2 3 4 5 6; do
     list=$(az functionapp function list -g "$RG" -n "$app" --query "[].name" -o tsv 2>/dev/null)
     [[ -n "$list" ]] && break

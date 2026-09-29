@@ -37,7 +37,9 @@ Solution Architect course. Instructor material — not learner-facing.
 
 | Path | Contents |
 |---|---|
-| `infra/main.bicep` | Subscription-scope entry point; each section is labelled with its lab |
+| `infra/` | Annotated single source of truth: the complete final solution, with lab markers |
+| `labs/lab-X.Y/{start,solution}/infra/` | Generated per-lab versions (do not edit - regenerate with `tools/generate-labs.py`) |
+| `tools/generate-labs.py` | Generates every lab from `infra/` and checks each solution compiles |
 | `infra/modules/` | One module per service |
 | `infra/parameters/` | `dev` (S1, Private Endpoints) and `test` (B1, public) parameter files |
 | `src/api/` | Claims Intake API (Express, TypeScript) |
@@ -50,7 +52,17 @@ Solution Architect course. Instructor material — not learner-facing.
 
 `LAB-BLANK(x.y)` comments mark candidate blanks for the learner start versions.
 
-## Quick start
+## Working through the labs
+
+```bash
+export LEARNER_ID=s01
+./scripts/start-lab.sh 1.1          # copies the lab's start version (with TODOs) to workspace/infra
+# ...complete the TODOs, following the lab guide...
+./scripts/deploy-infra.sh dev       # deploys workspace/infra
+./scripts/solution-lab.sh 1.1       # (only if you need to catch up)
+```
+
+## Quick start (complete solution, no workspace)
 
 ```bash
 export LEARNER_ID=s01                               # your learner ID

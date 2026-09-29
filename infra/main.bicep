@@ -1,8 +1,7 @@
 // =============================================================================
-// Contoso Claims Hub - FINAL SOLUTION (end-of-course state)
+// Contoso Claims Hub - reference solution
 // Resource-group-scope entry point: each learner deploys into resource groups
 // the instructor pre-created for them (rg-claimshub-<learnerId>-<env>).
-// Lab mapping is marked on each section.
 // =============================================================================
 targetScope = 'resourceGroup'
 
@@ -28,45 +27,12 @@ param environmentName string
 @description('Azure region for all regional resources. Defaults to the resource group location.')
 param location string = resourceGroup().location
 
-@description('Object ID of the deploying user: az ad signed-in-user show --query id -o tsv. Granted data-plane access for administration and verification.')
-param adminPrincipalId string
-
-@description('Email for alert notifications. Empty = alerts fire without notification.')
-param alertEmail string = ''
-
 @description('Change to get new globally-unique names (e.g. while a deleted Key Vault is still soft-deleted).')
 param nameSeed string = ''
 
-@description('LAB 2.4: disable public network access on data-plane services and use Private Endpoints.')
-param lockDownDataPlane bool = true
-
-@description('LAB 2.1: create the Event Grid subscription. Set true only after the validation Function code is published.')
-param deployEventSubscription bool = false
-
-@description('Cosmos DB free tier - only one account per subscription can use it.')
-param cosmosEnableFreeTier bool = false
-
-@description('LAB 3.2: autoscale max RU/s for the claims container.')
-param cosmosAutoscaleMaxThroughput int = 1000
-
-@description('App Service plan SKU. Must be Standard (S1) or higher for autoscale.')
-param appServicePlanSku string = 'S1'
-
-@description('LAB 3.2: autoscale the App Service plan (requires Standard or higher; off for Basic).')
-param enableAutoscale bool = true
-
-@description('LAB 3.2: maximum App Service instances when autoscaling (kept low to protect the shared quota).')
-@minValue(1)
-@maxValue(3)
-param autoscaleMaxInstances int = 2
-
-@description('Memory per Function app instance on Flex Consumption (MB). 512 keeps the class well inside the regional memory quota.')
-@allowed([
-  512
-  2048
-  4096
-])
-param functionInstanceMemoryMB int = 512
+// @from 1.2 begin
+@description('Object ID of the deploying user: az ad signed-in-user show --query id -o tsv. Granted data-plane access for administration and verification.')
+param adminPrincipalId string
 
 @description('App Configuration tier.')
 @allowed([
@@ -78,6 +44,51 @@ param appConfigSku string = 'developer'
 @secure()
 @description('Value for the PolicyAdminApiKey secret (simulated external system credential).')
 param policyAdminApiKey string = newGuid()
+// @end
+
+// @from 1.3 begin
+@description('App Service plan SKU. Must be Standard (S1) or higher for autoscale.')
+param appServicePlanSku string = 'S1'
+
+@description('Cosmos DB free tier - only one account per subscription can use it.')
+param cosmosEnableFreeTier bool = false
+// @end
+
+// @from 2.1 begin
+@description('LAB 2.1: create the Event Grid subscription. Set true only after the validation Function code is published.')
+param deployEventSubscription bool = false
+
+@description('Memory per Function app instance on Flex Consumption (MB). 512 keeps the class well inside the regional memory quota.')
+@allowed([
+  512
+  2048
+  4096
+])
+param functionInstanceMemoryMB int = 512
+// @end
+
+// @from 2.4 begin
+@description('LAB 2.4: disable public network access on data-plane services and use Private Endpoints.')
+param lockDownDataPlane bool = true
+// @end
+
+// @from 3.1 begin
+@description('Email for alert notifications. Empty = alerts fire without notification.')
+param alertEmail string = ''
+// @end
+
+// @from 3.2 begin
+@description('LAB 3.2: autoscale the App Service plan (requires Standard or higher; off for Basic).')
+param enableAutoscale bool = true
+
+@description('LAB 3.2: maximum App Service instances when autoscaling (kept low to protect the shared quota).')
+@minValue(1)
+@maxValue(3)
+param autoscaleMaxInstances int = 2
+
+@description('LAB 3.2: autoscale max RU/s for the claims container.')
+param cosmosAutoscaleMaxThroughput int = 1000
+// @end
 
 // -----------------------------------------------------------------------------
 // Naming, tags, role IDs
@@ -109,17 +120,19 @@ var names = {
   idProc: 'id-${w}-proc-${l}-${e}'
 }
 
-var documentsContainer = 'claim-documents'
-var processingQueue = 'claims-processing'
+var documentsContainer = 'claim-documents' // @from 2.1
+var processingQueue = 'claims-processing' // @from 2.2
 
-var tags = {
-  workload: workloadName
-  environment: environmentName
-  owner: learnerId
-  learner: learnerId
-  managedBy: 'bicep'
-}
+// LAB-BLANK(1.1): define the tags every resource must carry: workload, environment, owner (the learner ID), learner, and managedBy ('bicep')
+var tags = { // @blank 1.1
+  workload: workloadName // @blank 1.1
+  environment: environmentName // @blank 1.1
+  owner: learnerId // @blank 1.1
+  learner: learnerId // @blank 1.1
+  managedBy: 'bicep' // @blank 1.1
+} // @blank 1.1
 
+// @from 1.2 begin
 // Built-in role definition IDs
 var roles = {
   keyVaultSecretsUser: '4633458b-17de-408a-b874-0445c86b69e6'
@@ -136,9 +149,10 @@ var roles = {
   serviceBusDataOwner: '090c5cfd-751d-490a-894a-3ce6f1109419'
   monitoringMetricsPublisher: '3913510d-42f4-4e42-8a64-420c390055eb'
 }
+// @end
 
 // -----------------------------------------------------------------------------
-// LAB 1.1 - Governance and identities (resource group is pre-created)
+// LAB 1.1 - Governance and identity (the resource group is pre-created)
 // -----------------------------------------------------------------------------
 module governance 'modules/governance.bicep' = {
   name: 'governance'
@@ -149,11 +163,12 @@ module governance 'modules/governance.bicep' = {
       'environment'
       'owner'
     ]
-    notAllowedResourceTypes: [
-      'Microsoft.Compute/virtualMachines'
-      'Microsoft.Compute/virtualMachineScaleSets'
-      'Microsoft.ContainerService/managedClusters'
-    ]
+    // LAB-BLANK(1.1): PaaS-first guardrail - list the resource types to deny: virtual machines, VM scale sets and AKS clusters
+    notAllowedResourceTypes: [ // @blank 1.1
+      'Microsoft.Compute/virtualMachines' // @blank 1.1
+      'Microsoft.Compute/virtualMachineScaleSets' // @blank 1.1
+      'Microsoft.ContainerService/managedClusters' // @blank 1.1
+    ] // @blank 1.1
   }
 }
 
@@ -166,6 +181,7 @@ module idApi 'modules/identity.bicep' = {
   }
 }
 
+// @from 2.1 begin
 module idVal 'modules/identity.bicep' = {
   name: 'identity-validation'
   params: {
@@ -174,7 +190,9 @@ module idVal 'modules/identity.bicep' = {
     tags: tags
   }
 }
+// @end
 
+// @from 2.2 begin
 module idProc 'modules/identity.bicep' = {
   name: 'identity-processing'
   params: {
@@ -183,10 +201,9 @@ module idProc 'modules/identity.bicep' = {
     tags: tags
   }
 }
+// @end
 
-// -----------------------------------------------------------------------------
-// Pre-provisioned network (used in LAB 2.4)
-// -----------------------------------------------------------------------------
+// Pre-provisioned network (put to work in LAB 2.4)
 module network 'modules/network.bicep' = {
   name: 'network'
   params: {
@@ -196,8 +213,9 @@ module network 'modules/network.bicep' = {
   }
 }
 
+// @from 3.1 begin
 // -----------------------------------------------------------------------------
-// LAB 3.1 - Monitoring (deployed first so every app can send telemetry)
+// LAB 3.1 - Monitoring
 // -----------------------------------------------------------------------------
 module monitoring 'modules/monitoring.bicep' = {
   name: 'monitoring'
@@ -206,14 +224,17 @@ module monitoring 'modules/monitoring.bicep' = {
     tags: tags
     workspaceName: names.log
     appInsightsName: names.appi
-    roleAssignments: [
-      { principalId: idApi.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.monitoringMetricsPublisher }
-      { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.monitoringMetricsPublisher }
-      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.monitoringMetricsPublisher }
-    ]
+    // LAB-BLANK(3.1): let each app identity (api, validation, processing) send telemetry: role monitoringMetricsPublisher, principalType 'ServicePrincipal'
+    roleAssignments: [ // @blank 3.1
+      { principalId: idApi.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.monitoringMetricsPublisher } // @blank 3.1
+      { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.monitoringMetricsPublisher } // @blank 3.1
+      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.monitoringMetricsPublisher } // @blank 3.1
+    ] // @blank 3.1
   }
 }
+// @end
 
+// @from 1.2 begin
 // -----------------------------------------------------------------------------
 // LAB 1.2 - Key Vault and App Configuration
 // -----------------------------------------------------------------------------
@@ -223,10 +244,12 @@ module keyVault 'modules/keyvault.bicep' = {
     location: location
     tags: tags
     name: names.kv
-    publicNetworkAccess: !lockDownDataPlane
+    publicNetworkAccess: !lockDownDataPlane // @from 2.4
+    // @until 2.4: publicNetworkAccess: true
     policyAdminApiKey: policyAdminApiKey
     roleAssignments: [
-      { principalId: idApi.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.keyVaultSecretsUser }
+      // LAB-BLANK(1.2): let the API's managed identity READ secrets (role keyVaultSecretsUser, principalType 'ServicePrincipal')
+      { principalId: idApi.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.keyVaultSecretsUser } // @blank 1.2
       { principalId: adminPrincipalId, principalType: 'User', roleDefinitionId: roles.keyVaultSecretsOfficer }
     ]
   }
@@ -241,12 +264,14 @@ module appConfig 'modules/appconfig.bicep' = {
     skuName: appConfigSku
     roleAssignments: [
       { principalId: idApi.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.appConfigDataReader }
-      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.appConfigDataReader }
+      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.appConfigDataReader } // @from 2.2
       { principalId: adminPrincipalId, principalType: 'User', roleDefinitionId: roles.appConfigDataOwner }
     ]
   }
 }
+// @end
 
+// @from 1.3 begin
 // -----------------------------------------------------------------------------
 // LAB 1.3 - Cosmos DB
 // -----------------------------------------------------------------------------
@@ -256,18 +281,22 @@ module cosmos 'modules/cosmos.bicep' = {
     location: location
     tags: tags
     name: names.cosmos
-    publicNetworkAccess: !lockDownDataPlane
+    publicNetworkAccess: !lockDownDataPlane // @from 2.4
+    // @until 2.4: publicNetworkAccess: true
     enableFreeTier: cosmosEnableFreeTier
-    autoscaleMaxThroughput: cosmosAutoscaleMaxThroughput
+    // LAB-BLANK(3.2): after migrating the container to autoscale, pass the autoscale maximum (parameter cosmosAutoscaleMaxThroughput)
+    autoscaleMaxThroughput: cosmosAutoscaleMaxThroughput // @from 3.2 @blank 3.2
     dataContributorPrincipalIds: [
       idApi.outputs.principalId
-      idVal.outputs.principalId
-      idProc.outputs.principalId
+      idVal.outputs.principalId // @from 2.1
+      idProc.outputs.principalId // @from 2.2
       adminPrincipalId
     ]
   }
 }
+// @end
 
+// @from 2.1 begin
 // -----------------------------------------------------------------------------
 // LAB 2.1 - Storage (documents + Functions runtime)
 // -----------------------------------------------------------------------------
@@ -277,14 +306,16 @@ module storageDocs 'modules/storage.bicep' = {
     location: location
     tags: tags
     name: names.stDocs
-    publicNetworkAccess: !lockDownDataPlane
+    publicNetworkAccess: !lockDownDataPlane // @from 2.4
+    // @until 2.4: publicNetworkAccess: true
     containerNames: [
       documentsContainer
     ]
     enableLifecyclePolicy: true
     roleAssignments: [
       { principalId: idApi.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.blobDataContributor }
-      { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.blobDataReader }
+      // LAB-BLANK(2.1): the validation Function only needs to READ documents - pick the least-privileged blob role
+      { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.blobDataReader } // @blank 2.1
       { principalId: adminPrincipalId, principalType: 'User', roleDefinitionId: roles.blobDataContributor }
     ]
   }
@@ -296,22 +327,25 @@ module storageFunc 'modules/storage.bicep' = {
     location: location
     tags: tags
     name: names.stFunc
-    publicNetworkAccess: !lockDownDataPlane
+    publicNetworkAccess: !lockDownDataPlane // @from 2.4
+    // @until 2.4: publicNetworkAccess: true
     containerNames: [
       'deploy-validation'
-      'deploy-processing'
+      'deploy-processing' // @from 2.2
     ]
     roleAssignments: [
       { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.blobDataOwner }
       { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.queueDataContributor }
       { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.tableDataContributor }
-      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.blobDataOwner }
-      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.queueDataContributor }
-      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.tableDataContributor }
+      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.blobDataOwner } // @from 2.2
+      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.queueDataContributor } // @from 2.2
+      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.tableDataContributor } // @from 2.2
     ]
   }
 }
+// @end
 
+// @from 2.2 begin
 // -----------------------------------------------------------------------------
 // LAB 2.2 - Service Bus
 // -----------------------------------------------------------------------------
@@ -322,27 +356,31 @@ module serviceBus 'modules/servicebus.bicep' = {
     tags: tags
     name: names.sb
     queueName: processingQueue
-    workspaceId: monitoring.outputs.workspaceId
+    workspaceId: monitoring.outputs.workspaceId // @from 3.1
     roleAssignments: [
-      { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.serviceBusDataSender }
-      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.serviceBusDataReceiver }
+      // LAB-BLANK(2.2): least privilege - the validation identity only SENDS to the queue, the processing identity only RECEIVES
+      { principalId: idVal.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.serviceBusDataSender } // @blank 2.2
+      { principalId: idProc.outputs.principalId, principalType: 'ServicePrincipal', roleDefinitionId: roles.serviceBusDataReceiver } // @blank 2.2
       { principalId: adminPrincipalId, principalType: 'User', roleDefinitionId: roles.serviceBusDataOwner }
     ]
   }
 }
+// @end
 
+// @from 2.4 begin
 // -----------------------------------------------------------------------------
 // LAB 2.4 - Private Endpoints
 // Excluded (training trade-offs): Service Bus (Standard tier has no Private
 // Endpoints) and App Configuration (ARM must be able to write key-values).
 // -----------------------------------------------------------------------------
 var privateEndpointDefs = [
-  { resource: names.cosmos, type: 'Microsoft.DocumentDB/databaseAccounts', groupId: 'Sql', zone: 'privatelink.documents.azure.com' }
+  // LAB-BLANK(2.4): add Private Endpoints for Cosmos DB (groupId 'Sql', zone 'privatelink.documents.azure.com') and Key Vault (groupId 'vault', zone 'privatelink.vaultcore.azure.net')
+  { resource: names.cosmos, type: 'Microsoft.DocumentDB/databaseAccounts', groupId: 'Sql', zone: 'privatelink.documents.azure.com' } // @blank 2.4
   { resource: names.stDocs, type: 'Microsoft.Storage/storageAccounts', groupId: 'blob', zone: 'privatelink.blob.${environment().suffixes.storage}' }
   { resource: names.stFunc, type: 'Microsoft.Storage/storageAccounts', groupId: 'blob', zone: 'privatelink.blob.${environment().suffixes.storage}' }
   { resource: names.stFunc, type: 'Microsoft.Storage/storageAccounts', groupId: 'queue', zone: 'privatelink.queue.${environment().suffixes.storage}' }
   { resource: names.stFunc, type: 'Microsoft.Storage/storageAccounts', groupId: 'table', zone: 'privatelink.table.${environment().suffixes.storage}' }
-  { resource: names.kv, type: 'Microsoft.KeyVault/vaults', groupId: 'vault', zone: 'privatelink.vaultcore.azure.net' }
+  { resource: names.kv, type: 'Microsoft.KeyVault/vaults', groupId: 'vault', zone: 'privatelink.vaultcore.azure.net' } // @blank 2.4
 ]
 
 module privateEndpoints 'modules/privateendpoint.bicep' = [for pe in privateEndpointDefs: if (lockDownDataPlane) {
@@ -364,7 +402,9 @@ module privateEndpoints 'modules/privateendpoint.bicep' = [for pe in privateEndp
     appConfig
   ]
 }]
+// @end
 
+// @from 1.3 begin
 // -----------------------------------------------------------------------------
 // LAB 1.3 - Claims Intake API (App Service)   [VNet integration: LAB 2.4]
 // -----------------------------------------------------------------------------
@@ -376,29 +416,35 @@ module api 'modules/appservice.bicep' = {
     planName: names.apiPlan
     appName: names.api
     skuName: appServicePlanSku
-    enableAutoscale: enableAutoscale
-    autoscaleMaxInstances: autoscaleMaxInstances
+    enableAutoscale: enableAutoscale // @from 3.2
+    // @until 3.2: enableAutoscale: false
+    autoscaleMaxInstances: autoscaleMaxInstances // @from 3.2
     identityId: idApi.outputs.id
     identityClientId: idApi.outputs.clientId
-    subnetId: lockDownDataPlane ? network.outputs.subnetIds.app : ''
+    // LAB-BLANK(2.4): route the API's outbound traffic through its VNet subnet (network.outputs.subnetIds.app) when the data plane is locked down, otherwise ''
+    subnetId: lockDownDataPlane ? network.outputs.subnetIds.app : '' // @from 2.4 @blank 2.4
+    // @until 2.4: subnetId: ''
     appSettings: {
-      COSMOS_ENDPOINT: cosmos.outputs.endpoint
-      COSMOS_DATABASE: cosmos.outputs.databaseName
-      COSMOS_CONTAINER: cosmos.outputs.containerName
+      // LAB-BLANK(1.3): tell the API where Cosmos DB is - COSMOS_ENDPOINT, COSMOS_DATABASE and COSMOS_CONTAINER from the cosmos module's outputs
+      COSMOS_ENDPOINT: cosmos.outputs.endpoint // @blank 1.3
+      COSMOS_DATABASE: cosmos.outputs.databaseName // @blank 1.3
+      COSMOS_CONTAINER: cosmos.outputs.containerName // @blank 1.3
       KEYVAULT_URI: keyVault.outputs.uri
       APPCONFIG_ENDPOINT: appConfig.outputs.endpoint
-      DOCUMENTS_BLOB_ENDPOINT: storageDocs.outputs.blobEndpoint
-      DOCUMENTS_CONTAINER: documentsContainer
-      APPLICATIONINSIGHTS_CONNECTION_STRING: monitoring.outputs.connectionString
+      DOCUMENTS_BLOB_ENDPOINT: storageDocs.outputs.blobEndpoint // @from 2.1
+      DOCUMENTS_CONTAINER: documentsContainer // @from 2.1
+      APPLICATIONINSIGHTS_CONNECTION_STRING: monitoring.outputs.connectionString // @from 3.1
     }
   }
-  dependsOn: [
-    privateEndpoints
-  ]
+  dependsOn: [ // @from 2.4
+    privateEndpoints // @from 2.4
+  ] // @from 2.4
 }
+// @end
 
+// @from 2.1 begin
 // -----------------------------------------------------------------------------
-// LAB 2.1 - Validation Function app (Event Grid trigger -> Service Bus output)
+// LAB 2.1 - Validation Function app (Event Grid trigger -> Service Bus from LAB 2.2)
 // -----------------------------------------------------------------------------
 module funcValidation 'modules/functionapp.bicep' = {
   name: 'func-validation'
@@ -412,22 +458,25 @@ module funcValidation 'modules/functionapp.bicep' = {
     storageAccountName: storageFunc.outputs.name
     deploymentContainerName: 'deploy-validation'
     instanceMemoryMB: functionInstanceMemoryMB
-    subnetId: lockDownDataPlane ? network.outputs.subnetIds.funcValidation : ''
-    appInsightsConnectionString: monitoring.outputs.connectionString
+    subnetId: lockDownDataPlane ? network.outputs.subnetIds.funcValidation : '' // @from 2.4
+    // @until 2.4: subnetId: ''
+    appInsightsConnectionString: monitoring.outputs.connectionString // @from 3.1
     appSettings: {
       COSMOS_ENDPOINT: cosmos.outputs.endpoint
       COSMOS_DATABASE: cosmos.outputs.databaseName
       COSMOS_CONTAINER: cosmos.outputs.containerName
-      ServiceBusConnection__fullyQualifiedNamespace: serviceBus.outputs.fullyQualifiedNamespace
-      ServiceBusConnection__credential: 'managedidentity'
-      ServiceBusConnection__clientId: idVal.outputs.clientId
+      ServiceBusConnection__fullyQualifiedNamespace: serviceBus.outputs.fullyQualifiedNamespace // @from 2.2
+      ServiceBusConnection__credential: 'managedidentity' // @from 2.2
+      ServiceBusConnection__clientId: idVal.outputs.clientId // @from 2.2
     }
   }
-  dependsOn: [
-    privateEndpoints
-  ]
+  dependsOn: [ // @from 2.4
+    privateEndpoints // @from 2.4
+  ] // @from 2.4
 }
+// @end
 
+// @from 2.2 begin
 // -----------------------------------------------------------------------------
 // LAB 2.2 / 2.3 - Processing Function app (Service Bus trigger + Durable approval)
 // -----------------------------------------------------------------------------
@@ -443,8 +492,9 @@ module funcProcessing 'modules/functionapp.bicep' = {
     storageAccountName: storageFunc.outputs.name
     deploymentContainerName: 'deploy-processing'
     instanceMemoryMB: functionInstanceMemoryMB
-    subnetId: lockDownDataPlane ? network.outputs.subnetIds.funcProcessing : ''
-    appInsightsConnectionString: monitoring.outputs.connectionString
+    subnetId: lockDownDataPlane ? network.outputs.subnetIds.funcProcessing : '' // @from 2.4
+    // @until 2.4: subnetId: ''
+    appInsightsConnectionString: monitoring.outputs.connectionString // @from 3.1
     appSettings: {
       COSMOS_ENDPOINT: cosmos.outputs.endpoint
       COSMOS_DATABASE: cosmos.outputs.databaseName
@@ -453,13 +503,19 @@ module funcProcessing 'modules/functionapp.bicep' = {
       ServiceBusConnection__fullyQualifiedNamespace: serviceBus.outputs.fullyQualifiedNamespace
       ServiceBusConnection__credential: 'managedidentity'
       ServiceBusConnection__clientId: idProc.outputs.clientId
+      // LAB-BLANK(2.3): switch on the Durable approval workflow (APPROVAL_WORKFLOW_ENABLED: 'true') and set how long it waits for an approver (APPROVAL_TIMEOUT_HOURS: '72')
+      APPROVAL_WORKFLOW_ENABLED: 'true' // @from 2.3 @blank 2.3
+      APPROVAL_TIMEOUT_HOURS: '72' // @from 2.3 @blank 2.3
+      // @until 2.3: APPROVAL_WORKFLOW_ENABLED: 'false'
     }
   }
-  dependsOn: [
-    privateEndpoints
-  ]
+  dependsOn: [ // @from 2.4
+    privateEndpoints // @from 2.4
+  ] // @from 2.4
 }
+// @end
 
+// @from 2.1 begin
 // -----------------------------------------------------------------------------
 // LAB 2.1 - Event Grid
 // -----------------------------------------------------------------------------
@@ -475,7 +531,9 @@ module eventGrid 'modules/eventgrid.bicep' = {
     deploySubscription: deployEventSubscription
   }
 }
+// @end
 
+// @from 3.1 begin
 // -----------------------------------------------------------------------------
 // LAB 3.1 - Alerts
 // -----------------------------------------------------------------------------
@@ -491,20 +549,21 @@ module alerts 'modules/alerts.bicep' = {
     validationFunctionAppName: funcValidation.outputs.name
   }
 }
+// @end
 
 // -----------------------------------------------------------------------------
 // Outputs (consumed by the scripts in /scripts)
 // -----------------------------------------------------------------------------
 output resourceGroupName string = resourceGroup().name
-output apiAppName string = api.outputs.name
-output apiUrl string = api.outputs.url
-output validationFunctionAppName string = funcValidation.outputs.name
-output processingFunctionAppName string = funcProcessing.outputs.name
-output serviceBusNamespaceName string = serviceBus.outputs.name
-output processingQueueName string = processingQueue
-output cosmosAccountName string = names.cosmos
-output keyVaultName string = names.kv
-output appConfigName string = names.appcs
-output documentsStorageAccountName string = names.stDocs
-output logAnalyticsWorkspaceName string = names.log
-output appInsightsName string = names.appi
+output keyVaultName string = names.kv // @from 1.2
+output appConfigName string = names.appcs // @from 1.2
+output cosmosAccountName string = names.cosmos // @from 1.3
+output apiAppName string = api.outputs.name // @from 1.3
+output apiUrl string = api.outputs.url // @from 1.3
+output documentsStorageAccountName string = names.stDocs // @from 2.1
+output validationFunctionAppName string = funcValidation.outputs.name // @from 2.1
+output processingFunctionAppName string = funcProcessing.outputs.name // @from 2.2
+output serviceBusNamespaceName string = serviceBus.outputs.name // @from 2.2
+output processingQueueName string = processingQueue // @from 2.2
+output logAnalyticsWorkspaceName string = names.log // @from 3.1
+output appInsightsName string = names.appi // @from 3.1

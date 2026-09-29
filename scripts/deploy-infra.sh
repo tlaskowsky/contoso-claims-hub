@@ -13,18 +13,26 @@ if [[ "$(az group exists -n "$RG")" != "true" ]]; then
   fail "Resource group $RG not found. Check LEARNER_ID ($LEARNER_ID) or ask the instructor."
   exit 1
 fi
-ADMIN_ID=$(az ad signed-in-user show --query id -o tsv)
+[[ -f "$PARAM_FILE" ]] || { fail "Parameter file not found: $PARAM_FILE"; exit 1; }
 
-step "Deploying $DEPLOYMENT_NAME into $RG (event subscription: $EVENT_SUB)"
+# Pass only the parameters this lab's template declares.
+PARAMS=$(az bicep build --file "$INFRA_DIR/main.bicep" --stdout 2>/dev/null | jq -r '.parameters | keys[]') || true
+if [[ -z "$PARAMS" ]]; then
+  fail "main.bicep does not compile - fix the TODOs first:  az bicep build --file $INFRA_DIR/main.bicep"
+  exit 1
+fi
+has() { grep -qx "$1" <<< "$PARAMS"; }
+EXTRA=(learnerId="$LEARNER_ID" nameSeed="${NAME_SEED:-}")
+has adminPrincipalId        && EXTRA+=(adminPrincipalId="$(az ad signed-in-user show --query id -o tsv)")
+has deployEventSubscription && EXTRA+=(deployEventSubscription="$EVENT_SUB")
+has alertEmail              && EXTRA+=(alertEmail="${ALERT_EMAIL:-}")
+
+step "Deploying $DEPLOYMENT_NAME into $RG from ${INFRA_DIR#$REPO_ROOT/} (event subscription: $EVENT_SUB)"
 az deployment group create \
   --resource-group "$RG" \
   --name "$DEPLOYMENT_NAME" \
-  --template-file "$REPO_ROOT/infra/main.bicep" \
+  --template-file "$INFRA_DIR/main.bicep" \
   --parameters "@$PARAM_FILE" \
-  --parameters learnerId="$LEARNER_ID" \
-               adminPrincipalId="$ADMIN_ID" \
-               deployEventSubscription="$EVENT_SUB" \
-               alertEmail="${ALERT_EMAIL:-}" \
-               nameSeed="${NAME_SEED:-}" \
+  --parameters "${EXTRA[@]}" \
   --query "properties.outputs" -o json
 ok "Infrastructure deployed"

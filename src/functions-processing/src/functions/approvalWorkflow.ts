@@ -22,13 +22,14 @@ export interface ApprovalDecision {
   decidedAt?: string;
 }
 
-const APPROVAL_TIMEOUT_HOURS = 72;
+const DEFAULT_APPROVAL_TIMEOUT_HOURS = 72;
 const AUTO_APPROVE_LIMIT = 1000;
 const COVERAGE_LIMITS: Record<string, number> = { auto: 50_000, home: 250_000, health: 100_000, commercial: 500_000 };
 
 // ---------------------------------------------------------------- orchestrator
 const approvalOrchestrator: df.OrchestrationHandler = function* (context: df.OrchestrationContext) {
-  const { claimId } = context.df.getInput() as { claimId: string };
+  const { claimId, approvalTimeoutHours } = context.df.getInput() as { claimId: string; approvalTimeoutHours?: number };
+  const timeoutHours = approvalTimeoutHours ?? DEFAULT_APPROVAL_TIMEOUT_HOURS; // passed in by the starter: orchestrators must stay deterministic
 
   const results: CheckResult[] = yield context.df.Task.all([
     context.df.callActivity('fraudCheck', claimId),
@@ -44,7 +45,7 @@ const approvalOrchestrator: df.OrchestrationHandler = function* (context: df.Orc
   if (autoApprove) {
     decision = { approved: true, approver: 'system:auto-approval', comment: `Under $${AUTO_APPROVE_LIMIT} and all checks passed (feature flag AutoApproveLowValue)` };
   } else {
-    const deadline = new Date(context.df.currentUtcDateTime.getTime() + APPROVAL_TIMEOUT_HOURS * 3_600_000);
+    const deadline = new Date(context.df.currentUtcDateTime.getTime() + timeoutHours * 3_600_000);
     const timeout = context.df.createTimer(deadline);
     const humanDecision = context.df.waitForExternalEvent('ApprovalDecision');
     const winner: df.Task = yield context.df.Task.any([humanDecision, timeout]);
@@ -52,7 +53,7 @@ const approvalOrchestrator: df.OrchestrationHandler = function* (context: df.Orc
       timeout.cancel();
       decision = humanDecision.result as ApprovalDecision;
     } else {
-      decision = { approved: false, approver: 'system:timeout', comment: `No decision within ${APPROVAL_TIMEOUT_HOURS} hours` };
+      decision = { approved: false, approver: 'system:timeout', comment: `No decision within ${timeoutHours} hours` };
     }
   }
 

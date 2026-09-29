@@ -17,3 +17,7 @@ local.settings.json
 
 # Built application packages (published as GitHub release assets)
 packages/
+
+# Learner working copies
+workspace/
+workspace.bak-*/
