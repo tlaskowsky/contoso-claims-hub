@@ -9,8 +9,17 @@ source "$(dirname "$0")/common.sh" "${1:-dev}"
 EVENT_SUB=false
 [[ "${2:-}" == "--with-event-subscription" ]] && EVENT_SUB=true
 
-if [[ "$(az group exists -n "$RG")" != "true" ]]; then
-  fail "Resource group $RG not found. Check LEARNER_ID ($LEARNER_ID) or ask the instructor."
+exists=$(az group exists -n "$RG" 2>/tmp/claimshub-az-err)
+if [[ -z "$exists" ]]; then
+  if grep -qiE "token|credential|login|authenticat" /tmp/claimshub-az-err; then
+    fail "Azure sign-in problem (not a missing resource group). Run the command again; if it repeats, reload the portal page or restart Cloud Shell."
+  else
+    fail "Could not check resource group $RG: $(head -c 300 /tmp/claimshub-az-err)"
+  fi
+  exit 1
+fi
+if [[ "$exists" != "true" ]]; then
+  fail "Resource group $RG not found. Check LEARNER_ID ($LEARNER_ID) and the subscription (az account show), or ask the instructor."
   exit 1
 fi
 [[ -f "$PARAM_FILE" ]] || { fail "Parameter file not found: $PARAM_FILE"; exit 1; }

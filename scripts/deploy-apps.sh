@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the three applications from ready-built packages.
-#   ./scripts/deploy-apps.sh dev                  # learners: packages downloaded from the latest GitHub release
+#   ./scripts/deploy-apps.sh dev                  # every app that exists (packages from the latest GitHub release)
+#   ./scripts/deploy-apps.sh dev validation       # only the named apps: api, validation, processing
 #   ./scripts/deploy-apps.sh dev --from-source    # instructor: build from src/ first (needs Node 22)
 # Package source can be overridden with PACKAGES_URL=<base URL> or local files in ./packages/.
 source "$(dirname "$0")/common.sh" "${1:-dev}"
@@ -14,8 +15,23 @@ VAL_APP=$(output validationFunctionAppName)
 PROC_APP=$(output processingFunctionAppName)
 [[ -z "$API_APP$VAL_APP$PROC_APP" ]] && { fail "No apps found in $RG - deploy the infrastructure first."; exit 1; }
 
+# Optional selection: deploy only the named apps (saves minutes when an app hasn't changed).
+FROM_SOURCE=false; SELECTED=""
+for arg in "${@:2}"; do
+  case "$arg" in
+    --from-source) FROM_SOURCE=true ;;
+    api|validation|processing) SELECTED="$SELECTED $arg" ;;
+    *) fail "Unknown argument '$arg' (use api, validation, processing or --from-source)"; exit 1 ;;
+  esac
+done
+if [[ -n "$SELECTED" ]]; then
+  [[ "$SELECTED" == *api* ]]        || API_APP=""
+  [[ "$SELECTED" == *validation* ]] || VAL_APP=""
+  [[ "$SELECTED" == *processing* ]] || PROC_APP=""
+fi
+
 # --- Get the packages ---------------------------------------------------------------
-if [[ "${2:-}" == "--from-source" ]]; then
+if $FROM_SOURCE; then
   "$REPO_ROOT/scripts/build-packages.sh"
 elif [[ ! -f "$PKG_DIR/api.zip" || ! -f "$PKG_DIR/functions-validation.zip" || ! -f "$PKG_DIR/functions-processing.zip" ]]; then
   step "Downloading application packages"
@@ -52,7 +68,7 @@ for pair in "functions-validation:$VAL_APP" "functions-processing:$PROC_APP"; do
   ok "$app deployed"
 done
 
-step "Functions registered (may take a minute to appear)"
+[[ -n "$VAL_APP$PROC_APP" ]] && step "Functions registered (may take a minute to appear)"
 for app in "$VAL_APP" "$PROC_APP"; do
   [[ -z "$app" ]] && continue
   for i in 1 2 3 4 5 6; do

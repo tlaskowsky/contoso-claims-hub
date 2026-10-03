@@ -82,7 +82,7 @@ module governance 'modules/governance.bicep' = {
       'environment'
       'owner'
     ]
-    // TODO (Lab 1.1): PaaS-first guardrail - list the resource types to deny: virtual machines, VM scale sets and AKS clusters
+    // TODO (Lab 1.1): PaaS-first guardrail - add the parameter notAllowedResourceTypes: [ ... ] listing virtual machines, VM scale sets and AKS clusters (same shape as inheritedTagNames above)
   }
 }
 

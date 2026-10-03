@@ -30,7 +30,7 @@ check_tier() { # <tier> <needed>
 }
 check_tier S1 "$N"
 check_tier B1 "$N"
-echo "   (Autoscale can add up to $N more S1 instances only if CPU stays above 70%; lab traffic does not.)"
+echo "   (Autoscale can add up to $N more S1 instances only if average CPU stays above 80% for 15 minutes; lab traffic does not.)"
 
 # --- Counted resources ---------------------------------------------------------------
 echo; echo "Resource counts (current + needed <= limit)"
